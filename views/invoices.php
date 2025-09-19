@@ -86,6 +86,27 @@
                                                     <?php } ?>
                                                 </ul>
                                             </div>
+                                             <button type="button" class="btn btn-info dropdown-toggle btn-sm" data-toggle="dropdown">
+        <i class="fa fa-print"></i> Imprimir <span class="caret"></span>
+    </button>
+    <ul class="dropdown-menu dropdown-menu-right">
+        <li>
+            <a href="javascript:void(0)" onclick="printInvoice(<?php echo $invoice['id']; ?>)">
+                <i class="fa fa-file-text"></i> Factura Completa
+            </a>
+        </li>
+        <li>
+            <a href="javascript:void(0)" onclick="printTicket(<?php echo $invoice['id']; ?>)">
+                <i class="fa fa-receipt"></i> Ticket Simple
+            </a>
+        </li>
+        <li class="divider"></li>
+        <li>
+            <a href="javascript:void(0)" onclick="autoPrint(<?php echo $invoice['id']; ?>, 'invoice')">
+                <i class="fa fa-magic"></i> Auto-Imprimir
+            </a>
+        </li>
+    </ul>
                                         </td>
                                     </tr>
                                 <?php } ?>
@@ -106,8 +127,101 @@ $(function(){
             { "orderable": false, "targets": [6] } // Columna de opciones no ordenable
         ],
         "language": {
-            "url": "<?php echo base_url('assets/plugins/datatables/'); ?><?php echo get_datatables_language_url(); ?>"
+            "url": "<?php echo base_url('assets/plugins/datatables/'); ?>Spanish.json"
         }
     });
 });
+</script>
+
+<script>
+// Cargar el print manager
+document.addEventListener('DOMContentLoaded', function() {
+    // Verificar si hay factura para auto-imprimir
+    const autoPrintInvoice = '<?php echo $this->session->userdata('auto_print_invoice'); ?>';
+    
+    if (autoPrintInvoice) {
+        <?php $this->session->unset_userdata('auto_print_invoice'); ?>
+        
+        setTimeout(function() {
+            if (confirm('¿Imprimir la factura recién creada?')) {
+                autoPrint(autoPrintInvoice);
+            }
+        }, 1000);
+    }
+});
+
+// Funciones globales de impresión
+function printInvoice(invoiceId) {
+    const url = '<?php echo admin_url("factura_printer/print_invoice/"); ?>' + invoiceId;
+    const printWindow = window.open(url, 'print_invoice', 'width=800,height=600,scrollbars=yes');
+    
+    printWindow.focus();
+}
+
+function printTicket(invoiceId) {
+    const url = '<?php echo admin_url("factura_printer/print_ticket/"); ?>' + invoiceId;
+    const printWindow = window.open(url, 'print_ticket', 'width=350,height=500,scrollbars=yes');
+    
+    printWindow.focus();
+}
+
+function autoPrint(invoiceId, type = 'invoice') {
+    // Obtener configuración del usuario
+    $.get('<?php echo admin_url("factura_printer/get_settings"); ?>', function(settings) {
+        switch(settings.default_printer_type) {
+            case 'thermal':
+                printThermal(invoiceId, type);
+                break;
+            case 'usb':
+                printUSB(invoiceId, type);
+                break;
+            default:
+                if (type === 'ticket') {
+                    printTicket(invoiceId);
+                } else {
+                    printInvoice(invoiceId);
+                }
+        }
+    }, 'json');
+}
+
+function printThermal(invoiceId, type) {
+    $.post('<?php echo admin_url("factura_printer/print_"); ?>' + type + '/' + invoiceId + '/thermal', 
+        function(response) {
+            if (response.success) {
+                alert_float('success', 'Impreso en impresora térmica');
+            } else {
+                alert_float('danger', 'Error: ' + response.message);
+            }
+        }, 'json'
+    ).fail(function() {
+        alert_float('danger', 'Error de conexión con impresora térmica');
+    });
+}
+
+function printUSB(invoiceId, type) {
+    if (!('serial' in navigator)) {
+        alert_float('warning', 'Su navegador no soporta impresión USB. Usando impresión web...');
+        if (type === 'ticket') {
+            printTicket(invoiceId);
+        } else {
+            printInvoice(invoiceId);
+        }
+        return;
+    }
+    
+    // Implementación de impresión USB usando Web Serial API
+    navigator.serial.requestPort().then(function(port) {
+        return port.open({ baudRate: 9600 });
+    }).then(function(port) {
+        // Obtener datos de la factura
+        return $.get('<?php echo admin_url("factura_printer/api_print_invoice/"); ?>' + invoiceId);
+    }).then(function(data) {
+        if (data.success) {
+            alert_float('success', 'Impreso por USB correctamente');
+        }
+    }).catch(function(error) {
+        alert_float('danger', 'Error de impresión USB: ' + error.message);
+    });
+}
 </script>

@@ -27,12 +27,14 @@ function alegra_cr_admin_init()
     if (has_permission('alegra_cr', '', 'view')) {
         $CI = &get_instance();
 
+        include_once(__DIR__ . '/hooks.php');
+
         // Menú principal
         $CI->app_menu->add_sidebar_menu_item('alegra-cr', [
             'name'     => _l('alegra_cr'),
             'href'     => admin_url('alegra_facturacion_cr/invoices'),
             'position' => 35,
-            'icon'     => 'fa fa-file-text-o'
+            'icon'     => 'fa fa-server'
         ]);
 
         // Submenús
@@ -55,6 +57,20 @@ function alegra_cr_admin_init()
             'name'     => _l('alegra_cr_settings'),
             'href'     => admin_url('alegra_facturacion_cr/settings'),
             'position' => 3,
+        ]);
+
+        $CI->app_menu->add_sidebar_children_item('alegra-cr', [
+            'slug'     => 'alegra-cr-tax-settings',
+            'name'     => _l('alegra_cr_tax_settings'),
+            'href'     => admin_url('alegra_facturacion_cr/tax_settings'),
+            'position' => 4,
+        ]);
+
+        $CI->app_menu->add_sidebar_children_item('alegra-cr', [
+            'slug'     => 'alegra-cr-payment-methods-settings',
+            'name'     => _l('alegra_cr_payment_methods_settings'),
+            'href'     => admin_url('alegra_facturacion_cr/payment_methods_settings'),
+            'position' => 4,
         ]);
     }
 }

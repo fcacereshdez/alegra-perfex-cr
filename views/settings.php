@@ -1,258 +1,327 @@
-<?php defined('BASEPATH') or exit('No direct script access allowed'); ?>
-<?php init_head(); ?>
-<div id="wrapper">
-    <div class="content">
+<?php defined('BASEPATH') or exit('No direct script access allowed');
+
+// Obtener configuraciones usando get_option() de Perfex
+$settings = alegra_cr_get_current_settings();
+$perfex_payment_modes = alegra_cr_get_payment_modes();
+$payment_config = alegra_cr_get_payment_methods_config();
+?>
+
+<div class="horizontal-scrollable-tabs panel-full-width-tabs">
+    <div class="scroller arrow-left"><i class="fa fa-angle-left"></i></div>
+    <div class="scroller arrow-right"><i class="fa fa-angle-right"></i></div>
+    <div class="horizontal-tabs">
+        <ul class="nav nav-tabs nav-tabs-horizontal" role="tablist">
+            <li role="presentation" class="active">
+                <a href="#alegra_credentials" aria-controls="alegra_credentials" role="tab" data-toggle="tab">
+                    <i class="fa fa-key"></i> Credenciales API
+                </a>
+            </li>
+            <li role="presentation">
+                <a href="#alegra_payment_methods" aria-controls="alegra_payment_methods" role="tab" data-toggle="tab">
+                    <i class="fa fa-credit-card"></i> Métodos de Pago
+                </a>
+            </li>
+            <li role="presentation">
+                <a href="#alegra_auto_transmit" aria-controls="alegra_auto_transmit" role="tab" data-toggle="tab">
+                    <i class="fa fa-magic"></i> Auto-transmisión
+                </a>
+            </li>
+            <li role="presentation">
+                <a href="#alegra_advanced" aria-controls="alegra_advanced" role="tab" data-toggle="tab">
+                    <i class="fa fa-cogs"></i> Configuración Avanzada
+                </a>
+            </li>
+            <li role="presentation">
+                <a href="#alegra_testing" aria-controls="alegra_testing" role="tab" data-toggle="tab">
+                    <i class="fa fa-flask"></i> Pruebas
+                </a>
+            </li>
+        </ul>
+    </div>
+</div>
+
+<div class="tab-content">
+    <!-- Pestaña 1: Credenciales API -->
+    <div role="tabpanel" class="tab-pane active" id="alegra_credentials">
         <div class="row">
-            <div class="col-md-8">
-                <div class="panel_s">
-                    <div class="panel-body">
-                        <h4 class="no-margin">
-                            <?php echo $title; ?>
-                        </h4>
-                        <hr class="hr-panel-heading" />
-                        <?php echo form_open(admin_url('alegra_facturacion_cr/settings')); ?>
-                        
-                        <!-- Credenciales API -->
-                        <div class="form-group">
-                            <label for="alegra_email"><?php echo _l('alegra_cr_email'); ?></label>
-                            <input type="email" class="form-control" name="alegra_email" id="alegra_email" 
-                                   value="<?php echo isset($settings['alegra_email']) ? $settings['alegra_email'] : ''; ?>" required>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="alegra_token"><?php echo _l('alegra_cr_token'); ?></label>
-                            <input type="password" class="form-control" name="alegra_token" id="alegra_token" 
-                                   value="" placeholder="********">
-                            <small class="form-text text-muted"><?php echo _l('alegra_cr_token_help'); ?></small>
-                        </div>
-                        
-                        <hr>
-                        
-                        <!-- Configuraciones Automáticas -->
-                        <h5><i class="fa fa-magic"></i> Configuraciones Automáticas</h5>
-                        
-                        <div class="form-group">
-                            <div class="checkbox checkbox-primary">
-                                <input type="checkbox" id="auto_transmit_enabled" 
-                                       name="auto_transmit_enabled" value="1"
-                                       <?php echo (isset($settings['auto_transmit_enabled']) && $settings['auto_transmit_enabled']) ? 'checked' : ''; ?>>
-                                <label for="auto_transmit_enabled">
-                                    <strong>Activar auto-transmisión de facturas</strong>
-                                </label>
-                            </div>
-                            <small class="form-text text-muted">
-                                Cuando esté activada, las facturas que cumplan las condiciones configuradas 
-                                se transmitirán automáticamente a Alegra.
-                            </small>
-                        </div>
-                        
-                        <!-- Configuración de métodos de pago para auto-transmisión -->
-                        <div id="auto-transmit-config" class="form-group" style="<?php echo (isset($settings['auto_transmit_enabled']) && $settings['auto_transmit_enabled']) ? '' : 'display:none;'; ?>">
-                            <label>Métodos de pago que activan auto-transmisión</label>
-                            <div class="panel panel-default">
+            <div class="col-md-12">
+                <h4><i class="fa fa-key"></i> Credenciales de Alegra API</h4>
+                <hr>
+                
+                <?php echo render_input('settings[alegra_cr_email]', 'Email de Alegra', 
+                    $settings['alegra_email'], 
+                    'email', ['required' => true]); ?>
+
+                <?php echo render_input('settings[alegra_cr_token]', 'Token de API', '', 'password', [
+                    'placeholder' => '********',
+                    'data-toggle' => 'tooltip',
+                    'title' => 'Dejar vacío para mantener el token actual'
+                ]); ?>
+                
+                <div class="alert alert-info">
+                    <i class="fa fa-info-circle"></i>
+                    <strong>Información:</strong> Puedes obtener tu token de API desde tu cuenta de Alegra en Configuración → Integraciones → API.
+                </div>
+                
+                <div class="form-group">
+                    <button type="button" id="test-alegra-connection" class="btn btn-info">
+                        <i class="fa fa-plug"></i> Probar Conexión
+                    </button>
+                    <div id="connection-result" style="margin-top: 10px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pestaña 2: Métodos de Pago -->
+    <div role="tabpanel" class="tab-pane" id="alegra_payment_methods">
+        <div class="row">
+            <div class="col-md-12">
+                <h4><i class="fa fa-credit-card"></i> Configuración de Métodos de Pago</h4>
+                <hr>
+                
+                <div class="alert alert-info">
+                    <strong>Información:</strong> Configure qué métodos de pago de Perfex corresponden a tarjeta o efectivo para la facturación electrónica en Costa Rica.
+                </div>
+                
+                <?php if (!empty($perfex_payment_modes)): ?>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="panel panel-info">
+                                <div class="panel-heading">
+                                    <h5 class="panel-title">
+                                        <i class="fa fa-credit-card text-danger"></i> Métodos de Pago con TARJETA
+                                    </h5>
+                                    <small>IVA 4% para servicios médicos</small>
+                                </div>
                                 <div class="panel-body">
-                                    <?php if (!empty($perfex_payment_modes)): ?>
-                                        <div class="row">
-                                            <?php foreach ($perfex_payment_modes as $mode): ?>
-                                                <div class="col-md-6">
-                                                    <div class="checkbox checkbox-success">
-                                                        <input type="checkbox" 
-                                                               id="auto_transmit_method_<?php echo $mode['id']; ?>"
-                                                               name="auto_transmit_payment_methods[]" 
-                                                               value="<?php echo $mode['id']; ?>"
-                                                               <?php echo (isset($settings['auto_transmit_payment_methods']) && is_array($settings['auto_transmit_payment_methods']) && in_array($mode['id'], $settings['auto_transmit_payment_methods'])) ? 'checked' : ''; ?>>
-                                                        <label for="auto_transmit_method_<?php echo $mode['id']; ?>">
-                                                            <strong><?php echo $mode['name']; ?></strong>
-                                                            <?php if (!empty($mode['description'])): ?>
-                                                                <br><small class="text-muted"><?php echo strip_tags($mode['description']); ?></small>
-                                                            <?php endif; ?>
-                                                        </label>
-                                                    </div>
-                                                </div>
-                                            <?php endforeach; ?>
+                                    <?php foreach ($perfex_payment_modes as $mode): ?>
+                                        <div class="form-group">
+                                            <div class="checkbox checkbox-primary">
+                                                <input type="checkbox" 
+                                                       id="card_method_<?php echo $mode['id']; ?>"
+                                                       name="alegra_card_payment_methods[]" 
+                                                       value="<?php echo $mode['id']; ?>"
+                                                       class="card-method-checkbox"
+                                                       <?php echo (isset($payment_config['card_payment_methods']) && in_array($mode['id'], $payment_config['card_payment_methods'])) ? 'checked' : ''; ?>>
+                                                <label for="card_method_<?php echo $mode['id']; ?>">
+                                                    <strong><?php echo $mode['name']; ?></strong>
+                                                    <?php if (!empty($mode['description'])): ?>
+                                                        <br><small class="text-muted"><?php echo strip_tags($mode['description']); ?></small>
+                                                    <?php endif; ?>
+                                                </label>
+                                            </div>
                                         </div>
-                                        <small class="form-text text-info">
-                                            <i class="fa fa-info-circle"></i> Solo las facturas con estos métodos de pago se auto-transmitirán.
-                                        </small>
-                                    <?php else: ?>
-                                        <div class="alert alert-warning">
-                                            No hay métodos de pago configurados. 
-                                            <a href="<?php echo admin_url('paymentmodes'); ?>" target="_blank">Configure métodos de pago</a>
-                                        </div>
-                                    <?php endif; ?>
+                                    <?php endforeach; ?>
                                 </div>
                             </div>
                         </div>
                         
-                        <div class="form-group" id="additional-auto-config" style="<?php echo (isset($settings['auto_transmit_enabled']) && $settings['auto_transmit_enabled']) ? '' : 'display:none;'; ?>">
-                            <div class="checkbox checkbox-warning">
-                                <input type="checkbox" id="auto_transmit_medical_only" 
-                                       name="auto_transmit_medical_only" value="1"
-                                       <?php echo (isset($settings['auto_transmit_medical_only']) && $settings['auto_transmit_medical_only']) ? 'checked' : ''; ?>>
-                                <label for="auto_transmit_medical_only">
-                                    <strong>Solo auto-transmitir facturas con servicios médicos</strong>
-                                </label>
+                        <div class="col-md-6">
+                            <div class="panel panel-success">
+                                <div class="panel-heading">
+                                    <h5 class="panel-title">
+                                        <i class="fa fa-money text-success"></i> Métodos de Pago en EFECTIVO
+                                    </h5>
+                                    <small>IVA 13% para servicios médicos</small>
+                                </div>
+                                <div class="panel-body">
+                                    <?php foreach ($perfex_payment_modes as $mode): ?>
+                                        <div class="form-group">
+                                            <div class="checkbox checkbox-success">
+                                                <input type="checkbox" 
+                                                       id="cash_method_<?php echo $mode['id']; ?>"
+                                                       name="alegra_cash_payment_methods[]" 
+                                                       value="<?php echo $mode['id']; ?>"
+                                                       class="cash-method-checkbox"
+                                                       <?php echo (isset($payment_config['cash_payment_methods']) && in_array($mode['id'], $payment_config['cash_payment_methods'])) ? 'checked' : ''; ?>>
+                                                <label for="cash_method_<?php echo $mode['id']; ?>">
+                                                    <strong><?php echo $mode['name']; ?></strong>
+                                                    <?php if (!empty($mode['description'])): ?>
+                                                        <br><small class="text-muted"><?php echo strip_tags($mode['description']); ?></small>
+                                                    <?php endif; ?>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </div>
                             </div>
-                            <small class="form-text text-muted">
-                                Si está marcado, solo se auto-transmitirán facturas que contengan servicios médicos
-                            </small>
                         </div>
-                        
-                        <div class="form-group">
-                            <div class="checkbox checkbox-info">
-                                <input type="checkbox" id="auto_detect_medical_services" 
-                                       name="auto_detect_medical_services" value="1"
-                                       <?php echo (isset($settings['auto_detect_medical_services']) && $settings['auto_detect_medical_services']) ? 'checked' : ''; ?>>
-                                <label for="auto_detect_medical_services">
-                                    <strong>Detección automática de servicios médicos</strong>
-                                </label>
-                            </div>
-                            <small class="form-text text-muted">
-                                Detectar automáticamente servicios médicos por palabras clave y códigos CABYS
-                            </small>
-                        </div>
-                        
-                        <div class="form-group">
-                            <div class="checkbox checkbox-warning">
-                                <input type="checkbox" id="notify_auto_transmit" 
-                                       name="notify_auto_transmit" value="1"
-                                       <?php echo (isset($settings['notify_auto_transmit']) && $settings['notify_auto_transmit']) ? 'checked' : ''; ?>>
-                                <label for="notify_auto_transmit">
-                                    <strong>Notificar auto-transmisiones</strong>
-                                </label>
-                            </div>
-                            <small class="form-text text-muted">
-                                Agregar notas a las facturas cuando se transmitan automáticamente
-                            </small>
-                        </div>
-                        
-                        <hr>
-                        
-                        <!-- Configuraciones avanzadas -->
-                        <h5><i class="fa fa-cog"></i> Configuraciones Avanzadas</h5>
-                        
-                        <div class="form-group">
-                            <label for="medical_keywords">Palabras clave para servicios médicos</label>
-                            <textarea class="form-control" name="medical_keywords" id="medical_keywords" rows="3" 
-                                      placeholder="consulta, examen, chequeo, revisión, diagnóstico, cirugía..."><?php echo isset($settings['medical_keywords']) ? $settings['medical_keywords'] : 'consulta,examen,chequeo,revisión,diagnóstico,cirugía,operación,procedimiento,terapia,sesión,doctor,médico,especialista,evaluación'; ?></textarea>
-                            <small class="form-text text-muted">
-                                Palabras clave separadas por comas para detectar servicios médicos
-                            </small>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="auto_transmit_delay">Retraso para auto-transmisión (minutos)</label>
-                            <input type="number" class="form-control" name="auto_transmit_delay" id="auto_transmit_delay" 
-                                   value="<?php echo isset($settings['auto_transmit_delay']) ? $settings['auto_transmit_delay'] : '0'; ?>" 
-                                   min="0" max="60">
-                            <small class="form-text text-muted">
-                                Tiempo de espera antes de auto-transmitir (0 = inmediato)
-                            </small>
-                        </div>
-                        
-                        <div class="text-right">
-                            <button type="submit" class="btn btn-primary btn-lg">
-                                <i class="fa fa-save"></i> <?php echo _l('alegra_cr_save_settings'); ?>
-                            </button>
-                        </div>
-                        <?php echo form_close(); ?>
                     </div>
+                <?php else: ?>
+                    <div class="alert alert-warning">
+                        <strong>Atención:</strong> No se encontraron métodos de pago activos en el sistema. 
+                        Por favor, configure al menos un método de pago en 
+                        <a href="<?php echo admin_url('paymentmodes'); ?>" target="_blank">Configuración → Métodos de Pago</a>.
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pestaña 3: Auto-transmisión -->
+    <div role="tabpanel" class="tab-pane" id="alegra_auto_transmit">
+        <div class="row">
+            <div class="col-md-12">
+                <h4><i class="fa fa-magic"></i> Configuraciones Automáticas</h4>
+                <hr>
+
+                <div class="form-group">
+                    <div class="checkbox checkbox-primary">
+                        <input type="checkbox" id="auto_transmit_enabled" 
+                               name="settings[alegra_cr_auto_transmit_enabled]" value="1"
+                               <?php echo ($settings['auto_transmit_enabled'] == '1') ? 'checked' : ''; ?>>
+                        <label for="auto_transmit_enabled">
+                            <strong>Activar auto-transmisión de facturas</strong>
+                        </label>
+                    </div>
+                    <small class="form-text text-muted">
+                        Si está marcado, se auto-transmitirán facturas según los métodos de pago configurados
+                    </small>
+                </div>
+
+                <div class="form-group">
+                    <div class="checkbox checkbox-info">
+                        <input type="checkbox" id="auto_transmit_medical_only" 
+                               name="settings[alegra_cr_auto_transmit_medical_only]" value="1"
+                               <?php echo ($settings['auto_transmit_medical_only'] == '1') ? 'checked' : ''; ?>>
+                        <label for="auto_transmit_medical_only">
+                            <strong>Solo servicios médicos</strong>
+                        </label>
+                    </div>
+                    <small class="form-text text-muted">
+                        Transmitir automáticamente solo facturas con servicios médicos
+                    </small>
+                </div>
+
+                <div class="form-group">
+                    <div class="checkbox checkbox-info">
+                        <input type="checkbox" id="auto_detect_medical_services" 
+                               name="settings[alegra_cr_auto_detect_medical_services]" value="1"
+                               <?php echo ($settings['auto_detect_medical_services'] == '1') ? 'checked' : ''; ?>>
+                        <label for="auto_detect_medical_services">
+                            <strong>Detección automática de servicios médicos</strong>
+                        </label>
+                    </div>
+                    <small class="form-text text-muted">
+                        Detectar automáticamente servicios médicos por palabras clave y códigos CABYS
+                    </small>
+                </div>
+
+                <div class="form-group">
+                    <div class="checkbox checkbox-warning">
+                        <input type="checkbox" id="notify_auto_transmit" 
+                               name="settings[alegra_cr_notify_auto_transmit]" value="1"
+                               <?php echo ($settings['notify_auto_transmit'] == '1') ? 'checked' : ''; ?>>
+                        <label for="notify_auto_transmit">
+                            <strong>Notificar auto-transmisiones</strong>
+                        </label>
+                    </div>
+                    <small class="form-text text-muted">
+                        Agregar notas a las facturas cuando se transmitan automáticamente
+                    </small>
                 </div>
             </div>
-            
-            <!-- Panel de información -->
-            <div class="col-md-4">
-                <div class="panel_s">
-                    <div class="panel-body">
-                        <h4 class="no-margin">
-                            <i class="fa fa-info-circle"></i> Estado Actual
-                        </h4>
-                        <hr class="hr-panel-heading" />
-                        
-                        <?php if (isset($settings['auto_transmit_enabled']) && $settings['auto_transmit_enabled']): ?>
-                            <div class="alert alert-success">
-                                <i class="fa fa-check"></i> <strong>Auto-transmisión ACTIVADA</strong><br>
-                                <?php if (!empty($settings['auto_transmit_payment_methods'])): ?>
-                                    <small>Métodos configurados: <?php echo count($settings['auto_transmit_payment_methods']); ?></small>
-                                <?php else: ?>
-                                    <small class="text-warning">⚠️ No hay métodos de pago configurados</small>
-                                <?php endif; ?>
-                            </div>
-                        <?php else: ?>
-                            <div class="alert alert-warning">
-                                <i class="fa fa-pause"></i> <strong>Auto-transmisión DESACTIVADA</strong><br>
-                                Las facturas deben transmitirse manualmente.
-                            </div>
-                        <?php endif; ?>
-                        
-                        <!-- Mostrar métodos configurados -->
-                        <?php if (!empty($settings['auto_transmit_payment_methods']) && !empty($perfex_payment_modes)): ?>
-                            <h6><i class="fa fa-credit-card"></i> Métodos que activan auto-transmisión:</h6>
-                            <ul class="list-unstyled">
-                                <?php foreach ($perfex_payment_modes as $mode): ?>
-                                    <?php if (in_array($mode['id'], $settings['auto_transmit_payment_methods'])): ?>
-                                        <li><span class="label label-success"><?php echo $mode['name']; ?></span></li>
-                                    <?php endif; ?>
-                                <?php endforeach; ?>
-                            </ul>
-                        <?php endif; ?>
-                        
-                        <!-- Mostrar configuración adicional -->
-                        <?php if (isset($settings['auto_transmit_medical_only']) && $settings['auto_transmit_medical_only']): ?>
-                            <div class="alert alert-info">
-                                <i class="fa fa-stethoscope"></i> <strong>Solo servicios médicos</strong><br>
-                                <small>Solo se auto-transmitirán facturas con servicios médicos detectados</small>
-                            </div>
-                        <?php endif; ?>
-                        
-                        <hr>
-                        
-                        <h6><i class="fa fa-lightbulb-o"></i> Cómo funciona:</h6>
-                        <ol class="small">
-                            <li>Se crea una factura en Perfex</li>
-                            <li>El sistema verifica si el método de pago está en la lista configurada</li>
-                            <li>Si está configurado "Solo médicos", verifica si hay servicios médicos</li>
-                            <li>Si todas las condiciones se cumplen, transmite automáticamente a Alegra</li>
-                            <li>Aplica los impuestos correspondientes según las reglas de Costa Rica</li>
-                        </ol>
-                        
-                        <div class="alert alert-info">
-                            <small>
-                                <strong>Nota:</strong> Configure cuidadosamente los métodos de pago para 
-                                controlar cuándo se activa la auto-transmisión.
-                            </small>
-                        </div>
-                    </div>
+        </div>
+    </div>
+
+    <!-- Pestaña 4: Configuración Avanzada -->
+    <div role="tabpanel" class="tab-pane" id="alegra_advanced">
+        <div class="row">
+            <div class="col-md-12">
+                <h4><i class="fa fa-cogs"></i> Configuraciones Avanzadas</h4>
+                <hr>
+
+                <div class="form-group">
+                    <label for="medical_keywords">Palabras clave para servicios médicos</label>
+                    <textarea class="form-control" name="settings[alegra_cr_medical_keywords]" id="medical_keywords" rows="3" placeholder="consulta, examen, chequeo, revisión, diagnóstico, cirugía..."><?php echo $settings['medical_keywords']; ?></textarea>
+                    <small class="form-text text-muted">
+                        Palabras clave separadas por comas para detectar servicios médicos
+                    </small>
+                </div>
+
+                <div class="form-group">
+                    <label for="auto_transmit_delay">Retraso para auto-transmisión (minutos)</label>
+                    <input type="number" class="form-control" name="settings[alegra_cr_auto_transmit_delay]" id="auto_transmit_delay" 
+                           value="<?php echo $settings['auto_transmit_delay']; ?>" 
+                           min="0" max="60">
+                    <small class="form-text text-muted">
+                        Tiempo de espera antes de auto-transmitir (0 = inmediato)
+                    </small>
                 </div>
                 
-                <!-- Test de funcionalidad -->
-                <div class="panel_s">
-                    <div class="panel-body">
-                        <h4 class="no-margin">
-                            <i class="fa fa-flask"></i> Probar Configuración
-                        </h4>
-                        <hr class="hr-panel-heading" />
-                        
-                        <button type="button" id="test-auto-detection" class="btn btn-info btn-block">
-                            <i class="fa fa-search"></i> Probar Detección Automática
-                        </button>
-                        
-                        <button type="button" id="test-payment-config" class="btn btn-warning btn-block" style="margin-top: 10px;">
-                            <i class="fa fa-credit-card"></i> Verificar Config. Pagos
-                        </button>
-                        
-                        <div id="test-results" style="margin-top: 15px;"></div>
+                <div class="form-group">
+                    <h5><i class="fa fa-info-circle"></i> Estado del Sistema</h5>
+                    <div class="well well-sm">
+                        <p><strong>Email configurado:</strong> 
+                            <span class="label label-<?php echo !empty($settings['alegra_email']) ? 'success' : 'warning'; ?>">
+                                <?php echo !empty($settings['alegra_email']) ? $settings['alegra_email'] : 'No configurado'; ?>
+                            </span>
+                        </p>
+                        <p><strong>Token API:</strong> 
+                            <span class="label label-<?php echo !empty(get_option('alegra_cr_token')) ? 'success' : 'warning'; ?>">
+                                <?php echo !empty(get_option('alegra_cr_token')) ? 'Configurado' : 'No configurado'; ?>
+                            </span>
+                        </p>
+                        <p><strong>Auto-transmisión:</strong> 
+                            <span class="label label-<?php echo ($settings['auto_transmit_enabled'] == '1') ? 'success' : 'default'; ?>">
+                                <?php echo ($settings['auto_transmit_enabled'] == '1') ? 'Activada' : 'Desactivada'; ?>
+                            </span>
+                        </p>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+
+    <!-- Pestaña 5: Pruebas -->
+    <div role="tabpanel" class="tab-pane" id="alegra_testing">
+        <div class="row">
+            <div class="col-md-12">
+                <h4><i class="fa fa-flask"></i> Herramientas de Prueba</h4>
+                <hr>
+
+                <div class="form-group">
+                    <button type="button" id="test-auto-detection" class="btn btn-info">
+                        <i class="fa fa-search"></i> Probar Detección Automática
+                    </button>
+                    <small class="form-text text-muted">
+                        Prueba la detección automática de servicios médicos
+                    </small>
+                </div>
+
+                <div class="form-group">
+                    <button type="button" id="test-payment-config" class="btn btn-warning">
+                        <i class="fa fa-credit-card"></i> Verificar Config. Pagos
+                    </button>
+                    <small class="form-text text-muted">
+                        Verifica la configuración actual de métodos de pago
+                    </small>
+                </div>
+
+                <div class="form-group">
+                    <button type="button" id="debug-form-data" class="btn btn-default">
+                        <i class="fa fa-bug"></i> Debug Formulario
+                    </button>
+                    <small class="form-text text-muted">
+                        Mostrar datos del formulario en la consola (para desarrollo)
+                    </small>
+                </div>
+
+                <div id="test-results" style="margin-top: 15px;"></div>
+            </div>
+        </div>
+    </div>
 </div>
 
-<?php init_tail(); ?>
-
+<!-- JavaScript específico para esta configuración -->
 <script>
+// Variable global necesaria para las rutas AJAX
+var admin_url = '<?php echo admin_url(); ?>';
+
 $(document).ready(function() {
+    console.log('Alegra CR: Configuración cargada');
+    
     // Mostrar/ocultar configuraciones de auto-transmisión
     $('#auto_transmit_enabled').change(function() {
         if ($(this).is(':checked')) {
@@ -263,30 +332,46 @@ $(document).ready(function() {
             $('#auto-transmit-config input[type="checkbox"]').prop('checked', false);
         }
     });
-    
-    // Validación del formulario
-    $('form').submit(function(e) {
-        var email = $('#alegra_email').val();
-        
-        if (!email) {
-            alert('El email de Alegra es requerido');
-            e.preventDefault();
-            return false;
+
+    // Prevenir que un método esté en ambas categorías (tarjeta y efectivo)
+    $('.card-method-checkbox').change(function() {
+        if ($(this).is(':checked')) {
+            var methodId = $(this).val();
+            $('.cash-method-checkbox[value="' + methodId + '"]').prop('checked', false);
         }
-        
-        // Validar que si está activada la auto-transmisión, tenga al menos un método seleccionado
-        if ($('#auto_transmit_enabled').is(':checked')) {
-            var selectedMethods = $('#auto-transmit-config input[type="checkbox"]:checked').length;
-            if (selectedMethods === 0) {
-                alert('Debe seleccionar al menos un método de pago para auto-transmisión');
-                e.preventDefault();
-                return false;
-            }
-        }
-        
-        return true;
     });
-    
+
+    $('.cash-method-checkbox').change(function() {
+        if ($(this).is(':checked')) {
+            var methodId = $(this).val();
+            $('.card-method-checkbox[value="' + methodId + '"]').prop('checked', false);
+        }
+    });
+
+    // Test de conexión con Alegra
+    $('#test-alegra-connection').click(function() {
+        var btn = $(this);
+        var originalText = btn.html();
+        
+        btn.html('<i class="fa fa-spinner fa-spin"></i> Verificando...');
+        btn.prop('disabled', true);
+        
+        $.post(admin_url + 'alegra_facturacion_cr/test_connection', function(data) {
+            var result = $('#connection-result');
+            
+            if (data.success) {
+                result.html('<div class="alert alert-success"><i class="fa fa-check"></i> Conexión exitosa con Alegra</div>');
+            } else {
+                result.html('<div class="alert alert-danger"><i class="fa fa-times"></i> Error de conexión: ' + data.message + '</div>');
+            }
+        }, 'json').fail(function() {
+            $('#connection-result').html('<div class="alert alert-danger"><i class="fa fa-times"></i> Error al probar la conexión</div>');
+        }).always(function() {
+            btn.html(originalText);
+            btn.prop('disabled', false);
+        });
+    });
+
     // Probar detección automática
     $('#test-auto-detection').click(function() {
         var btn = $(this);
@@ -295,7 +380,7 @@ $(document).ready(function() {
         btn.html('<i class="fa fa-spinner fa-spin"></i> Probando...');
         btn.prop('disabled', true);
         
-        $.get('<?php echo admin_url("alegra_facturacion_cr/test_auto_detection"); ?>', function(data) {
+        $.get(admin_url + 'alegra_facturacion_cr/test_auto_detection', function(data) {
             if (data.success) {
                 var resultHtml = '<div class="alert alert-info"><strong>Resultados de Detección:</strong></div>';
                 data.results.forEach(function(result) {
@@ -317,7 +402,7 @@ $(document).ready(function() {
             btn.prop('disabled', false);
         });
     });
-    
+
     // Probar configuración de pagos
     $('#test-payment-config').click(function() {
         var btn = $(this);
@@ -326,7 +411,7 @@ $(document).ready(function() {
         btn.html('<i class="fa fa-spinner fa-spin"></i> Verificando...');
         btn.prop('disabled', true);
         
-        $.get('<?php echo admin_url("alegra_facturacion_cr/test_auto_transmit_config"); ?>', function(data) {
+        $.get(admin_url + 'alegra_facturacion_cr/test_auto_transmit_config', function(data) {
             if (data.success) {
                 var resultHtml = '<div class="alert alert-info"><strong>Configuración Actual:</strong></div>';
                 
@@ -349,25 +434,6 @@ $(document).ready(function() {
                     resultHtml += '<span class="text-warning">Ninguno configurado</span>';
                 }
                 
-                // Mostrar resultados de test en facturas recientes
-                if (data.test_results && data.test_results.length > 0) {
-                    resultHtml += '<hr><strong>Test en facturas recientes:</strong><br>';
-                    resultHtml += '<table class="table table-condensed" style="font-size: 12px;">';
-                    resultHtml += '<thead><tr><th>Factura</th><th>¿Se transmitiría?</th><th>Razón</th></tr></thead><tbody>';
-                    
-                    data.test_results.forEach(function(test) {
-                        var badgeClass = test.should_transmit ? 'success' : 'default';
-                        resultHtml += '<tr>';
-                        resultHtml += '<td>#' + test.invoice_id + '</td>';
-                        resultHtml += '<td><span class="label label-' + badgeClass + '">' + 
-                                     (test.should_transmit ? 'SÍ' : 'NO') + '</span></td>';
-                        resultHtml += '<td style="font-size: 10px;">' + test.reason + '</td>';
-                        resultHtml += '</tr>';
-                    });
-                    
-                    resultHtml += '</tbody></table>';
-                }
-                
                 $('#test-results').html(resultHtml);
             } else {
                 $('#test-results').html('<div class="alert alert-danger">Error en la prueba: ' + (data.error || 'Desconocido') + '</div>');
@@ -378,6 +444,40 @@ $(document).ready(function() {
             btn.html(originalText);
             btn.prop('disabled', false);
         });
+    });
+    
+    // Debug del formulario
+    $('#debug-form-data').click(function() {
+        var formData = {};
+        $('input, textarea, select').each(function() {
+            var $field = $(this);
+            var name = $field.attr('name');
+            if (!name) return;
+            
+            if ($field.is(':checkbox')) {
+                if (!formData[name]) formData[name] = [];
+                if ($field.is(':checked')) {
+                    formData[name].push($field.val());
+                }
+            } else {
+                formData[name] = $field.val();
+            }
+        });
+        
+        console.log('Datos del formulario:', formData);
+        $('#test-results').html('<div class="alert alert-info">Datos mostrados en la consola. Presiona F12 para verlos.</div>');
+    });
+
+    // Validación del formulario antes del envío
+    $('form').submit(function(e) {
+        var email = $('input[name="settings[alegra_cr_email]"]').val();
+        if (!email) {
+            alert('El email de Alegra es requerido');
+            e.preventDefault();
+            return false;
+        }
+        
+        return true;
     });
 });
 </script>

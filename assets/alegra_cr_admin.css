@@ -1,0 +1,334 @@
+/* Estilos para la configuración centralizada de Alegra CR */
+
+.alegra-cr-settings-tabs {
+    margin-bottom: 20px;
+}
+
+.alegra-cr-settings-tabs .nav-tabs {
+    border-bottom: 2px solid #ddd;
+}
+
+.alegra-cr-settings-tabs .nav-tabs > li > a {
+    border-radius: 4px 4px 0 0;
+    margin-right: 5px;
+}
+
+.alegra-cr-settings-tabs .nav-tabs > li.active > a {
+    border-bottom-color: transparent;
+    background-color: #fff;
+    color: #555;
+}
+
+.alegra-cr-panel {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    box-shadow: 0 1px 1px rgba(0,0,0,.05);
+}
+
+.alegra-cr-panel-header {
+    padding: 10px 15px;
+    border-bottom: 1px solid #ddd;
+    background-color: #f5f5f5;
+}
+
+.alegra-cr-panel-body {
+    padding: 15px;
+}
+
+.alegra-cr-status-indicator {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-right: 8px;
+}
+
+.alegra-cr-status-indicator.success {
+    background-color: #5cb85c;
+}
+
+.alegra-cr-status-indicator.warning {
+    background-color: #f0ad4e;
+}
+
+.alegra-cr-status-indicator.danger {
+    background-color: #d9534f;
+}
+
+.alegra-cr-status-indicator.info {
+    background-color: #5bc0de;
+}
+
+.alegra-cr-test-results {
+    max-height: 400px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 10px;
+    background-color: #fafafa;
+}
+
+.alegra-cr-settings-section {
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #eee;
+}
+
+.alegra-cr-settings-section:last-child {
+    border-bottom: none;
+}
+
+.alegra-cr-settings-section h4 {
+    color: #333;
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+}
+
+.alegra-cr-settings-section h4 i {
+    margin-right: 10px;
+    color: #428bca;
+}
+
+.alegra-cr-method-selection .checkbox {
+    margin-bottom: 10px;
+}
+
+.alegra-cr-method-selection .checkbox label {
+    padding-left: 25px;
+    font-weight: normal;
+}
+
+.alegra-cr-method-selection .checkbox input[type="checkbox"] {
+    margin-left: -25px;
+}
+
+.alegra-cr-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.alegra-cr-stat-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 15px;
+    border-radius: 8px;
+    text-align: center;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.alegra-cr-stat-card h3 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: bold;
+}
+
+.alegra-cr-stat-card p {
+    margin: 5px 0 0;
+    font-size: 14px;
+    opacity: 0.9;
+}
+
+.alegra-cr-connection-status {
+    padding: 10px;
+    border-radius: 4px;
+    margin-top: 10px;
+    display: none;
+}
+
+.alegra-cr-connection-status.success {
+    background-color: #d4edda;
+    border: 1px solid #c3e6cb;
+    color: #155724;
+}
+
+.alegra-cr-connection-status.error {
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
+    color: #721c24;
+}
+
+.alegra-cr-help-text {
+    font-size: 12px;
+    color: #666;
+    margin-top: 5px;
+    font-style: italic;
+}
+
+.alegra-cr-toggle-section {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 15px;
+    margin-top: 15px;
+}
+
+.alegra-cr-toggle-section.hidden {
+    display: none;
+}
+
+/* Animaciones */
+.alegra-cr-fade-in {
+    animation: alegraFadeIn 0.3s ease-in;
+}
+
+@keyframes alegraFadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.alegra-cr-loading {
+    position: relative;
+}
+
+.alegra-cr-loading::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255,255,255,0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+}
+
+.alegra-cr-loading::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 20px;
+    height: 20px;
+    margin: -10px 0 0 -10px;
+    border: 2px solid #428bca;
+    border-radius: 50%;
+    border-top-color: transparent;
+    animation: spin 1s linear infinite;
+    z-index: 11;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .alegra-cr-stats-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .alegra-cr-method-selection .col-md-6 {
+        margin-bottom: 20px;
+    }
+}
+
+/* Mejoras para las pestañas horizontales */
+.horizontal-scrollable-tabs {
+    position: relative;
+    margin-bottom: 20px;
+}
+
+.horizontal-scrollable-tabs .horizontal-tabs {
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+}
+
+.horizontal-scrollable-tabs .nav-tabs-horizontal {
+    border-bottom: 2px solid #428bca;
+    flex-wrap: nowrap;
+    display: flex;
+    min-width: max-content;
+}
+
+.horizontal-scrollable-tabs .nav-tabs-horizontal > li {
+    flex-shrink: 0;
+}
+
+.horizontal-scrollable-tabs .nav-tabs-horizontal > li > a {
+    white-space: nowrap;
+    padding: 10px 15px;
+    margin-right: 5px;
+    border: 1px solid #ddd;
+    border-bottom: none;
+    background-color: #f8f9fa;
+    color: #495057;
+}
+
+.horizontal-scrollable-tabs .nav-tabs-horizontal > li.active > a {
+    background-color: #428bca;
+    color: #fff;
+    border-color: #428bca;
+}
+
+.horizontal-scrollable-tabs .scroller {
+    position: absolute;
+    top: 0;
+    width: 30px;
+    height: 100%;
+    background: linear-gradient(to right, rgba(255,255,255,0.8), rgba(255,255,255,0));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 10;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.horizontal-scrollable-tabs .scroller.arrow-left {
+    left: 0;
+    background: linear-gradient(to right, rgba(255,255,255,0.9), rgba(255,255,255,0));
+}
+
+.horizontal-scrollable-tabs .scroller.arrow-right {
+    right: 0;
+    background: linear-gradient(to left, rgba(255,255,255,0.9), rgba(255,255,255,0));
+}
+
+.horizontal-scrollable-tabs:hover .scroller {
+    opacity: 1;
+}
+
+/* Indicadores de estado para configuraciones */
+.alegra-cr-config-status {
+    margin-bottom: 15px;
+}
+
+.alegra-cr-config-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    margin-bottom: 8px;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    background-color: #fff;
+}
+
+.alegra-cr-config-item .status-icon {
+    margin-right: 10px;
+    font-size: 16px;
+}
+
+.alegra-cr-config-item.enabled {
+    border-color: #28a745;
+    background-color: #f8fff8;
+}
+
+.alegra-cr-config-item.disabled {
+    border-color: #6c757d;
+    background-color: #f8f9fa;
+    opacity: 0.7;
+}
+
+.alegra-cr-config-item.error {
+    border-color: #dc3545;
+    background-color: #fff5f5;
+}

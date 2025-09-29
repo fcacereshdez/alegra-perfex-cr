@@ -13,18 +13,19 @@ if (!function_exists('alegra_cr_install_database')) {
     function alegra_cr_install_database()
     {
         $CI = &get_instance();
-        
+
         log_message('info', 'Alegra CR: Iniciando instalación de base de datos...');
-        
+
         try {
             // Verificar que no estén ya creadas las tablas
             if ($CI->db->table_exists(db_prefix() . 'alegra_cr_settings')) {
                 log_message('info', 'Alegra CR: Las tablas ya existen, omitiendo instalación');
                 return true;
             }
-            
+
             // 1. Tabla de configuraciones principales
-            $CI->db->query("
+            $CI->db->query(
+                "
                 CREATE TABLE `" . db_prefix() . "alegra_cr_settings` (
                     `id` int(11) NOT NULL AUTO_INCREMENT,
                     `setting_name` varchar(255) NOT NULL,
@@ -36,9 +37,10 @@ if (!function_exists('alegra_cr_install_database')) {
                     KEY `setting_name_idx` (`setting_name`)
                 ) ENGINE=InnoDB DEFAULT CHARSET=" . $CI->db->char_set . " COLLATE=" . $CI->db->dbcollat
             );
-            
+
             // 2. Tabla de mapeo de productos Perfex <-> Alegra
-            $CI->db->query("
+            $CI->db->query(
+                "
                 CREATE TABLE `" . db_prefix() . "alegra_cr_products_map` (
                     `id` int(11) NOT NULL AUTO_INCREMENT,
                     `perfex_item_id` int(11) NOT NULL,
@@ -53,9 +55,10 @@ if (!function_exists('alegra_cr_install_database')) {
                     KEY `status` (`status`)
                 ) ENGINE=InnoDB DEFAULT CHARSET=" . $CI->db->char_set . " COLLATE=" . $CI->db->dbcollat
             );
-            
+
             // 3. Tabla de mapeo de facturas Perfex <-> Alegra
-            $CI->db->query("
+            $CI->db->query(
+                "
                 CREATE TABLE `" . db_prefix() . "alegra_cr_invoices_map` (
                     `id` int(11) NOT NULL AUTO_INCREMENT,
                     `perfex_invoice_id` int(11) NOT NULL,
@@ -75,9 +78,10 @@ if (!function_exists('alegra_cr_install_database')) {
                     KEY `sync_date` (`sync_date`)
                 ) ENGINE=InnoDB DEFAULT CHARSET=" . $CI->db->char_set . " COLLATE=" . $CI->db->dbcollat
             );
-            
+
             // 4. Tabla de configuración de métodos de pago
-            $CI->db->query("
+            $CI->db->query(
+                "
                 CREATE TABLE `" . db_prefix() . "alegra_cr_payment_methods_config` (
                     `id` int(11) NOT NULL AUTO_INCREMENT,
                     `config_type` varchar(50) NOT NULL,
@@ -88,9 +92,10 @@ if (!function_exists('alegra_cr_install_database')) {
                     UNIQUE KEY `config_type` (`config_type`)
                 ) ENGINE=InnoDB DEFAULT CHARSET=" . $CI->db->char_set . " COLLATE=" . $CI->db->dbcollat
             );
-            
+
             // 5. Tabla de configuración de impuestos (opcional)
-            $CI->db->query("
+            $CI->db->query(
+                "
                 CREATE TABLE `" . db_prefix() . "alegra_cr_tax_config` (
                     `id` int(11) NOT NULL AUTO_INCREMENT,
                     `tax_name` varchar(255) NOT NULL,
@@ -108,9 +113,10 @@ if (!function_exists('alegra_cr_install_database')) {
                     KEY `is_active` (`is_active`)
                 ) ENGINE=InnoDB DEFAULT CHARSET=" . $CI->db->char_set . " COLLATE=" . $CI->db->dbcollat
             );
-            
+
             // 6. Tabla de logs de auto-transmisión (opcional)
-            $CI->db->query("
+            $CI->db->query(
+                "
                 CREATE TABLE `" . db_prefix() . "alegra_cr_logs` (
                     `id` int(11) NOT NULL AUTO_INCREMENT,
                     `invoice_id` int(11) DEFAULT NULL,
@@ -126,28 +132,27 @@ if (!function_exists('alegra_cr_install_database')) {
                     KEY `created_at` (`created_at`)
                 ) ENGINE=InnoDB DEFAULT CHARSET=" . $CI->db->char_set . " COLLATE=" . $CI->db->dbcollat
             );
-            
+
             log_message('info', 'Alegra CR: Tablas creadas exitosamente');
-            
+
             // Insertar configuraciones por defecto
             alegra_cr_insert_default_settings($CI);
-            
+
             // Insertar configuraciones de métodos de pago por defecto
             alegra_cr_insert_default_payment_config($CI);
-            
+
             // Insertar configuraciones de impuestos por defecto
             alegra_cr_insert_default_tax_config($CI);
-            
+
             log_message('info', 'Alegra CR: Instalación completada exitosamente');
-            
+
             return true;
-            
         } catch (Exception $e) {
             log_message('error', 'Alegra CR: Error durante instalación: ' . $e->getMessage());
             return false;
         }
     }
-    
+
     function alegra_cr_insert_default_settings($CI)
     {
         $default_settings = [
@@ -160,18 +165,30 @@ if (!function_exists('alegra_cr_install_database')) {
             'notify_auto_transmit' => '1',
             'medical_keywords' => 'consulta,examen,chequeo,revisión,diagnóstico,cirugía,operación,procedimiento,terapia,sesión,doctor,médico,especialista,evaluación',
             'auto_transmit_delay' => '0',
+            'default_printer_type' => '0',
+            'thermal_printer_ip' => '0',
+            'thermal_printer_port' => '0',
+            'company_logo_path' => '0',
+            'logo_width' => '0',
+            'logo_height' => '0',
+            'print_footer_message' => '0',
+            'auto_print' => '0',
+            'footer_conditions' => '0',
+            'show_footer_conditions' => '0',
+            'show_footer_conditions_ticket' => '0',
+            'footer_legal_text' => '0',
             'module_version' => '1.0.0',
             'installation_date' => date('Y-m-d H:i:s'),
             'last_update_date' => date('Y-m-d H:i:s')
         ];
-        
+
         foreach ($default_settings as $setting_name => $default_value) {
             $CI->db->insert(db_prefix() . 'alegra_cr_settings', [
                 'setting_name' => $setting_name,
                 'setting_value' => $default_value
             ]);
         }
-        
+
         // También crear las opciones en el sistema de Perfex para la integración
         foreach ($default_settings as $setting_name => $default_value) {
             $perfex_option_name = 'alegra_cr_' . $setting_name;
@@ -181,20 +198,20 @@ if (!function_exists('alegra_cr_install_database')) {
             if ($perfex_option_name === 'alegra_cr_alegra_token') {
                 $perfex_option_name = 'alegra_cr_token';
             }
-            
+
             // Evitar duplicados de prefijo
             if (strpos($setting_name, 'alegra_cr_') === 0) {
                 $perfex_option_name = $setting_name;
             } else {
                 $perfex_option_name = 'alegra_cr_' . $setting_name;
             }
-            
+
             add_option($perfex_option_name, $default_value);
         }
-        
+
         log_message('info', 'Alegra CR: Configuraciones por defecto insertadas');
     }
-    
+
     function alegra_cr_insert_default_payment_config($CI)
     {
         $payment_configs = [
@@ -207,14 +224,14 @@ if (!function_exists('alegra_cr_install_database')) {
                 'payment_method_ids' => '[]'
             ]
         ];
-        
+
         foreach ($payment_configs as $config) {
             $CI->db->insert(db_prefix() . 'alegra_cr_payment_methods_config', $config);
         }
-        
+
         log_message('info', 'Alegra CR: Configuraciones de métodos de pago insertadas');
     }
-    
+
     function alegra_cr_insert_default_tax_config($CI)
     {
         $default_taxes = [
@@ -262,11 +279,11 @@ if (!function_exists('alegra_cr_install_database')) {
                 ])
             ]
         ];
-        
+
         foreach ($default_taxes as $tax_data) {
             $CI->db->insert(db_prefix() . 'alegra_cr_tax_config', $tax_data);
         }
-        
+
         log_message('info', 'Alegra CR: Configuraciones de impuestos por defecto insertadas');
     }
 }

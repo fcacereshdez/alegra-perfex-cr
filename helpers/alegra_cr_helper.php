@@ -59,7 +59,7 @@ if (!function_exists('alegra_cr_api_request')) {
         $response = curl_exec($ch);
         $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $curl_error = curl_error($ch);
-        
+
         if ($curl_error) {
             log_message('error', 'cURL Error: ' . $curl_error);
             curl_close($ch);
@@ -84,7 +84,7 @@ if (!function_exists('alegra_cr_api_request')) {
             } elseif (!empty($response)) {
                 $error_message .= ': ' . substr($response, 0, 200);
             }
-            
+
             log_message('error', 'Alegra API Error: ' . $error_message);
             return ['error' => $error_message, 'status_code' => $http_code];
         }
@@ -124,7 +124,7 @@ if (!function_exists('alegra_cr_format_identification')) {
 
         // Limpiar caracteres no numéricos
         $clean_vat = preg_replace('/[^0-9]/', '', $vat);
-        
+
         // Determinar tipo basado en la longitud
         if (strlen($clean_vat) == 9) {
             return [
@@ -181,10 +181,10 @@ if (!function_exists('alegra_cr_map_perfex_tax_to_alegra')) {
     function alegra_cr_map_perfex_tax_to_alegra($tax_name, $tax_rate)
     {
         $tax_config = alegra_cr_get_tax_configuration();
-        
+
         // Normalizar nombre del impuesto
         $normalized_name = strtolower(trim($tax_name));
-        
+
         // Determinar el tipo de impuesto basado en la tasa
         if ($tax_rate == 0) {
             return $tax_config['EXEMPT'];
@@ -193,7 +193,7 @@ if (!function_exists('alegra_cr_map_perfex_tax_to_alegra')) {
         } elseif ($tax_rate == 13) {
             return $tax_config['IVA_STANDARD'];
         }
-        
+
         // Mapeo por nombre
         $name_mappings = [
             'iva' => 'IVA_STANDARD',
@@ -204,13 +204,13 @@ if (!function_exists('alegra_cr_map_perfex_tax_to_alegra')) {
             'exento' => 'EXEMPT',
             'exempt' => 'EXEMPT'
         ];
-        
+
         foreach ($name_mappings as $pattern => $type) {
             if (stripos($normalized_name, $pattern) !== false) {
                 return $tax_config[$type];
             }
         }
-        
+
         // Por defecto, usar IVA estándar
         return $tax_config['IVA_STANDARD'];
     }
@@ -226,27 +226,59 @@ if (!function_exists('alegra_cr_get_products_with_reduced_iva')) {
             // Códigos CABYS que califican para IVA del 4%
             'cabys_codes' => [
                 // Medicamentos y productos farmacéuticos
-                '21030', '21031', '21032', '21033', '21034',
-                '21040', '21041', '21042', '21043', '21044',
-                
+                '21030',
+                '21031',
+                '21032',
+                '21033',
+                '21034',
+                '21040',
+                '21041',
+                '21042',
+                '21043',
+                '21044',
+
                 // Alimentos básicos
-                '10010', '10011', '10012', '10013',
-                '10020', '10021', '10022', '10023',
-                
+                '10010',
+                '10011',
+                '10012',
+                '10013',
+                '10020',
+                '10021',
+                '10022',
+                '10023',
+
                 // Material médico
-                '33110', '33111', '33112',
-                
+                '33110',
+                '33111',
+                '33112',
+
                 // Productos de higiene básica
-                '39221', '39222', '39223',
+                '39221',
+                '39222',
+                '39223',
             ],
-            
+
             // Palabras clave en descripciones
             'keywords' => [
-                'medicamento', 'medicina', 'fármaco', 'droga médica',
-                'arroz', 'frijoles', 'maíz', 'pan', 'leche',
-                'aceite comestible', 'azúcar', 'sal',
-                'material médico', 'jeringa', 'vendaje',
-                'jabón', 'champú', 'pasta dental', 'papel higiénico'
+                'medicamento',
+                'medicina',
+                'fármaco',
+                'droga médica',
+                'arroz',
+                'frijoles',
+                'maíz',
+                'pan',
+                'leche',
+                'aceite comestible',
+                'azúcar',
+                'sal',
+                'material médico',
+                'jeringa',
+                'vendaje',
+                'jabón',
+                'champú',
+                'pasta dental',
+                'papel higiénico'
             ]
         ];
     }
@@ -264,38 +296,38 @@ if (!function_exists('alegra_cr_calculate_iva_return')) {
             'return_percentage' => 0,
             'notes' => []
         ];
-        
+
         // Verificar si el cliente es elegible para devolución de IVA
         // En Costa Rica, ciertos tipos de clientes pueden recibir devoluciones
-        
+
         $eligible_client_types = ['exportador', 'exonerado', 'diplomático'];
-        
+
         if (in_array($client_type, $eligible_client_types)) {
             $return_data['eligible'] = true;
-            
+
             // Calcular porcentaje de devolución según tipo de cliente
             switch ($client_type) {
                 case 'exportador':
                     $return_data['return_percentage'] = 100; // 100% del IVA
                     $return_data['notes'][] = 'Devolución completa por actividad exportadora';
                     break;
-                    
+
                 case 'exonerado':
                     $return_data['return_percentage'] = 100; // 100% del IVA
                     $return_data['notes'][] = 'Devolución por exoneración institucional';
                     break;
-                    
+
                 case 'diplomático':
                     $return_data['return_percentage'] = 100; // 100% del IVA
                     $return_data['notes'][] = 'Devolución por inmunidad diplomática';
                     break;
             }
-            
+
             $return_data['return_amount'] = ($iva_paid * $return_data['return_percentage']) / 100;
         } else {
             $return_data['notes'][] = 'Cliente no elegible para devolución de IVA';
         }
-        
+
         return $return_data;
     }
 }
@@ -308,11 +340,11 @@ if (!function_exists('alegra_cr_validate_tax_rates')) {
     {
         $valid_rates = [0, 4, 13]; // Tasas válidas en Costa Rica
         $errors = [];
-        
+
         foreach ($items as $index => $item) {
             if (isset($item['tax_rate'])) {
                 $rate = floatval($item['tax_rate']);
-                
+
                 if (!in_array($rate, $valid_rates)) {
                     $errors[] = [
                         'item_index' => $index,
@@ -323,7 +355,7 @@ if (!function_exists('alegra_cr_validate_tax_rates')) {
                 }
             }
         }
-        
+
         return [
             'valid' => empty($errors),
             'errors' => $errors
@@ -338,11 +370,11 @@ if (!function_exists('alegra_cr_format_tax_for_invoice')) {
     function alegra_cr_format_tax_for_invoice($perfex_item, $force_rate = null)
     {
         $taxes = [];
-        
+
         // Si se fuerza una tasa específica
         if ($force_rate !== null) {
             $tax_config = alegra_cr_get_tax_configuration();
-            
+
             if ($force_rate == 0) {
                 return []; // Sin impuestos
             } elseif ($force_rate == 4) {
@@ -350,24 +382,24 @@ if (!function_exists('alegra_cr_format_tax_for_invoice')) {
             } else {
                 $config = $tax_config['IVA_STANDARD'];
             }
-            
+
             return [[
                 'id' => $config['alegra_id'],
                 'percentage' => $force_rate
             ]];
         }
-        
+
         // Procesar impuestos existentes del item de Perfex
         for ($i = 1; $i <= 2; $i++) {
             $tax_name_field = 'taxname_' . $i;
             $tax_rate_field = 'taxrate_' . $i;
-            
+
             if (isset($perfex_item[$tax_name_field]) && !empty($perfex_item[$tax_name_field])) {
                 $tax_name = $perfex_item[$tax_name_field];
                 $tax_rate = floatval($perfex_item[$tax_rate_field]);
-                
+
                 $alegra_tax = alegra_cr_map_perfex_tax_to_alegra($tax_name, $tax_rate);
-                
+
                 if ($alegra_tax['alegra_id'] !== null) {
                     $taxes[] = [
                         'id' => $alegra_tax['alegra_id'],
@@ -376,34 +408,212 @@ if (!function_exists('alegra_cr_format_tax_for_invoice')) {
                 }
             }
         }
-        
+
         // Si no hay impuestos definidos, usar IVA estándar
         if (empty($taxes)) {
             $tax_config = alegra_cr_get_tax_configuration();
             $standard_tax = $tax_config['IVA_STANDARD'];
-            
+
             $taxes[] = [
                 'id' => $standard_tax['alegra_id'],
                 'percentage' => $standard_tax['rate']
             ];
         }
-        
+
         return $taxes;
     }
 
     if (!function_exists('get_datatables_language_url')) {
-    function get_datatables_language_url() {
-        // Detectar idioma del sistema
-        $language = get_option('active_language');
-        
-        switch ($language) {
-            case 'spanish':
-                return 'Spanish.json';
-            case 'english':
-            default:
-                return 'English.json';
+        function get_datatables_language_url()
+        {
+            // Detectar idioma del sistema
+            $language = get_option('active_language');
+
+            switch ($language) {
+                case 'spanish':
+                    return 'Spanish.json';
+                case 'english':
+                default:
+                    return 'English.json';
+            }
         }
+    }
+
+    if (!function_exists('alegra_cr_get_setting')) {
+        /**
+         * Obtiene una configuración del módulo
+         */
+        function alegra_cr_get_setting($setting_name, $default = null)
+        {
+            $CI = &get_instance();
+            $CI->load->model('alegra_facturacion_cr/alegra_cr_model');
+
+            return $CI->alegra_cr_model->get_setting($setting_name, $default);
+        }
+    }
+
+    if (!function_exists('alegra_cr_save_setting')) {
+        /**
+         * Guarda una configuración del módulo
+         */
+        function alegra_cr_save_setting($setting_name, $value)
+        {
+            $CI = &get_instance();
+            $CI->load->model('alegra_facturacion_cr/alegra_cr_model');
+
+            return $CI->alegra_cr_model->save_setting($setting_name, $value);
+        }
+    }
+
+
+    if (!function_exists('alegra_cr_save_settings')) {
+        /**
+         * Guarda múltiples configuraciones
+         */
+        function alegra_cr_save_settings($settings_array)
+        {
+            $CI = &get_instance();
+            $CI->load->model('alegra_facturacion_cr/alegra_cr_model');
+
+            return $CI->alegra_cr_model->save_settings($settings_array);
+        }
+    }
+
+    if (!function_exists('alegra_cr_get_payment_methods_config')) {
+        /**
+         * Obtiene configuración de métodos de pago
+         */
+        function alegra_cr_get_payment_methods_config()
+        {
+            $CI = &get_instance();
+            $CI->load->model('alegra_facturacion_cr/alegra_cr_model');
+
+            return $CI->alegra_cr_model->get_payment_methods_config();
+        }
+    }
+
+    /**
+ * Guardar cualquier configuración en options de Perfex
+ */
+if (!function_exists('alegra_cr_save_option')) {
+    function alegra_cr_save_option($key, $value)
+    {
+        // Asegurar prefijo
+        if (strpos($key, 'alegra_cr_') !== 0) {
+            $key = 'alegra_cr_' . $key;
+        }
+        
+        // Serializar arrays y objetos
+        if (is_array($value) || is_object($value)) {
+            $value = json_encode($value);
+        }
+        
+        // Actualizar o crear
+        update_option($key, $value);
+        
+        return true;
     }
 }
 
+/**
+ * Obtener cualquier configuración desde options
+ */
+if (!function_exists('alegra_cr_get_option')) {
+    function alegra_cr_get_option($key, $default = null)
+    {
+        // Asegurar prefijo
+        if (strpos($key, 'alegra_cr_') !== 0) {
+            $key = 'alegra_cr_' . $key;
+        }
+        
+        $value = get_option($key);
+        
+        // Si no existe, retornar default
+        if ($value === false || $value === null) {
+            return $default;
+        }
+        
+        // Intentar decodificar JSON
+        if (is_string($value)) {
+            $decoded = json_decode($value, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                return $decoded;
+            }
+        }
+        
+        return $value;
+    }
+}
+
+/**
+ * Guardar configuración de métodos de pago (unificado)
+ */
+if (!function_exists('alegra_cr_save_payment_config')) {
+    function alegra_cr_save_payment_config($config)
+    {
+        // Guardar métodos de tarjeta
+        alegra_cr_save_option('card_payment_methods', $config['card_payment_methods']);
+        
+        // Guardar métodos de efectivo
+        alegra_cr_save_option('cash_payment_methods', $config['cash_payment_methods']);
+        
+        return true;
+    }
+}
+
+/**
+ * Obtener configuración de métodos de pago (unificado)
+ */
+if (!function_exists('alegra_cr_get_payment_config')) {
+    function alegra_cr_get_payment_config()
+    {
+        return [
+            'card_payment_methods' => alegra_cr_get_option('card_payment_methods', []),
+            'cash_payment_methods' => alegra_cr_get_option('cash_payment_methods', [])
+        ];
+    }
+}
+
+/**
+ * Obtener todas las configuraciones unificadas
+ */
+if (!function_exists('alegra_cr_get_all_settings')) {
+    function alegra_cr_get_all_settings()
+    {
+        return [
+            'alegra_email' => alegra_cr_get_option('email', ''),
+            'alegra_token' => alegra_cr_get_option('token', ''),
+            'auto_transmit_enabled' => alegra_cr_get_option('auto_transmit_enabled', '0'),
+            'auto_transmit_payment_methods' => alegra_cr_get_option('auto_transmit_payment_methods', []),
+            'auto_transmit_medical_only' => alegra_cr_get_option('auto_transmit_medical_only', '0'),
+            'auto_detect_medical_services' => alegra_cr_get_option('auto_detect_medical_services', '1'),
+            'notify_auto_transmit' => alegra_cr_get_option('notify_auto_transmit', '1'),
+            'medical_keywords' => alegra_cr_get_option('medical_keywords', 'consulta,examen,chequeo,revisión,diagnóstico,cirugía,operación,procedimiento,terapia,sesión,doctor,médico,especialista,evaluación'),
+            'auto_transmit_delay' => alegra_cr_get_option('auto_transmit_delay', '0'),
+            'card_payment_methods' => alegra_cr_get_option('card_payment_methods', []),
+            'cash_payment_methods' => alegra_cr_get_option('cash_payment_methods', [])
+        ];
+    }
+}
+
+/**
+ * Guardar todas las configuraciones de una vez
+ */
+if (!function_exists('alegra_cr_save_all_settings')) {
+    function alegra_cr_save_all_settings($settings)
+    {
+        $success = true;
+        
+        foreach ($settings as $key => $value) {
+            // Eliminar prefijo si ya lo tiene para evitar duplicados
+            $clean_key = str_replace('alegra_cr_', '', $key);
+            
+            if (!alegra_cr_save_option($clean_key, $value)) {
+                $success = false;
+            }
+        }
+        
+        return $success;
+    }
+}
 }

@@ -204,15 +204,8 @@ function alegra_cr_should_auto_transmit_direct($CI, $invoice)
  */
 function alegra_cr_get_setting_direct($CI, $setting_name)
 {
-    try {
-        $result = $CI->db->get_where('alegra_cr_settings', ['setting_name' => $setting_name])->row();
-        return $result ? $result->setting_value : null;
-    } catch (Exception $e) {
-        log_message('error', 'Alegra CR: Error obteniendo setting ' . $setting_name . ': ' . $e->getMessage());
-        return null;
-    }
+    return alegra_cr_get_option($setting_name);
 }
-
 /**
  * Obtener métodos de pago de una factura directamente
  */
@@ -253,8 +246,8 @@ function alegra_cr_invoice_has_medical_services_direct($CI, $invoice_id)
             'rel_type' => 'invoice'
         ])->result_array();
         
-        // Obtener keywords médicas
-        $medical_keywords_setting = alegra_cr_get_setting_direct($CI, 'medical_keywords');
+        // Obtener keywords desde options
+        $medical_keywords_setting = alegra_cr_get_option('medical_keywords');
         $medical_keywords = $medical_keywords_setting ? 
             array_map('trim', explode(',', $medical_keywords_setting)) : 
             ['consulta', 'examen', 'chequeo', 'médico', 'doctor'];
@@ -264,7 +257,6 @@ function alegra_cr_invoice_has_medical_services_direct($CI, $invoice_id)
             
             foreach ($medical_keywords as $keyword) {
                 if (strpos($description, strtolower($keyword)) !== false) {
-                    log_message('error', 'Alegra CR: Servicio médico detectado: "' . $keyword . '" en "' . $item['description'] . '"');
                     return true;
                 }
             }

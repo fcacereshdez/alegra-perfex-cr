@@ -94,11 +94,10 @@ function alegra_cr_add_settings_section()
 /**
  * Procesa el guardado de configuraciones desde el sistema de settings
  */
-/**
- * Procesa el guardado de configuraciones desde el sistema de settings
- */
+
 function alegra_cr_process_settings_save($data)
 {
+
     if (!isset($data['group']) || $data['group'] !== 'alegra_cr') {
         return;
     }
@@ -106,31 +105,46 @@ function alegra_cr_process_settings_save($data)
     $CI = &get_instance();
     $post_data = $CI->input->post();
     
-    log_message('error', 'Alegra CR: POST data recibida: ' . json_encode($post_data));
+    log_message('error', 'Alegra CR: POST recibido: ' . json_encode($post_data));
     
-    // Procesar configuraciones de métodos de pago que no se manejan por opciones estándar
-    if (isset($post_data['settings'])) {
-        $settings = $post_data['settings'];
-        
-        if (isset($settings['card_payment_methods']) || isset($settings['cash_payment_methods'])) {
+    // Guardar configuraciones generales desde settings[]
+    if (isset($post_data['settings']) && is_array($post_data['settings'])) {
+        foreach ($post_data['settings'] as $key => $value) {
+            // No guardar token vacío
+            if ($key === 'alegra_cr_token' && empty($value)) {
+                log_message('error', "Alegra CR: Token vacío, omitiendo guardado");
+                continue;
+            }
             
-            $payment_config = [
-                'card_payment_methods' => isset($settings['card_payment_methods']) && is_array($settings['card_payment_methods']) ? 
-                    array_filter($settings['card_payment_methods']) : [],
-                'cash_payment_methods' => isset($settings['cash_payment_methods']) && is_array($settings['cash_payment_methods']) ? 
-                    array_filter($settings['cash_payment_methods']) : []
-            ];
+            // CRÍTICO: Convertir arrays a JSON ANTES de guardar
+            if (is_array($value)) {
+                $value = json_encode($value);
+                log_message('error', "Alegra CR: Convertido array {$key} a JSON: {$value}");
+            }
             
-            log_message('error', 'Alegra CR: Payment config a guardar: ' . json_encode($payment_config));
-            
-            // Usar la función auxiliar
-            alegra_cr_save_payment_methods_config($payment_config);
+            // Guardar directamente con el key recibido
+            update_option($key, $value);
+            log_message('error', "Alegra CR: Guardado {$key}");
         }
     }
     
-    log_message('info', 'Alegra CR: Configuraciones procesadas desde sistema de settings');
+    // Procesar checkboxes NO marcados (vienen vacíos)
+    $checkboxes = [
+        'alegra_cr_auto_transmit_enabled',
+        'alegra_cr_auto_transmit_medical_only',
+        'alegra_cr_auto_detect_medical_services',
+        'alegra_cr_notify_auto_transmit'
+    ];
+    
+    foreach ($checkboxes as $checkbox) {
+        if (!isset($post_data['settings'][$checkbox])) {
+            update_option($checkbox, '0');
+            log_message('error', "Alegra CR: Checkbox {$checkbox} = 0 (no marcado)");
+        }
+    }
+    
+    log_message('info', 'Alegra CR: Configuraciones guardadas exitosamente');
 }
-
 /**
  * Hook de activación del módulo
  */
@@ -160,36 +174,29 @@ function alegra_cr_create_admin_menus()
 {
     $CI = &get_instance();
 
-    // Menú principal
-    $CI->app_menu->add_sidebar_menu_item('alegra-cr', [
-        'name'     => _l('alegra_cr'),
-        'href'     => admin_url('alegra_facturacion_cr/invoices'),
-        'position' => 35,
-        'icon'     => 'fa fa-server'
-    ]);
+    // // Menú principal
+    // $CI->app_menu->add_sidebar_menu_item('alegra-cr', [
+    //     'name'     => _l('alegra_cr'),
+    //     'href'     => admin_url('alegra_facturacion_cr/invoices'),
+    //     'position' => 35,
+    //     'icon'     => 'fa fa-server'
+    // ]);
 
-    // Submenús
-    $CI->app_menu->add_sidebar_children_item('alegra-cr', [
-        'slug'     => 'alegra-cr-invoices',
-        'name'     => _l('alegra_cr_invoices'),
-        'href'     => admin_url('alegra_facturacion_cr/invoices'),
-        'position' => 1,
-    ]);
+    // // Submenús
+    // $CI->app_menu->add_sidebar_children_item('alegra-cr', [
+    //     'slug'     => 'alegra-cr-invoices',
+    //     'name'     => _l('alegra_cr_invoices'),
+    //     'href'     => admin_url('alegra_facturacion_cr/invoices'),
+    //     'position' => 1,
+    // ]);
 
-    $CI->app_menu->add_sidebar_children_item('alegra-cr', [
-        'slug'     => 'alegra-cr-products',
-        'name'     => _l('alegra_cr_products'),
-        'href'     => admin_url('alegra_facturacion_cr/products'),
-        'position' => 2,
-    ]);
+    // $CI->app_menu->add_sidebar_children_item('alegra-cr', [
+    //     'slug'     => 'alegra-cr-products',
+    //     'name'     => _l('alegra_cr_products'),
+    //     'href'     => admin_url('alegra_facturacion_cr/products'),
+    //     'position' => 2,
+    // ]);
     
-    // Enlace a configuración (redirige al sistema general de settings)
-    $CI->app_menu->add_sidebar_children_item('alegra-cr', [
-        'slug'     => 'alegra-cr-settings',
-        'name'     => 'Configuración',
-        'href'     => admin_url('settings?group=alegra_cr'),
-        'position' => 3,
-    ]);
 }
 
 /**
@@ -295,23 +302,121 @@ function alegra_cr_install_now()
 // FUNCIONES AUXILIARES
 // ============================================================================
 
+if (!function_exists('alegra_cr_save_option')) {
+    function alegra_cr_save_option($key, $value)
+    {
+        // Asegurar prefijo
+        if (strpos($key, 'alegra_cr_') !== 0) {
+            $key = 'alegra_cr_' . $key;
+        }
+        
+        // Serializar arrays y objetos
+        if (is_array($value) || is_object($value)) {
+            $value = json_encode($value);
+        }
+        
+        update_option($key, $value);
+        return true;
+    }
+}
+
+if (!function_exists('alegra_cr_get_option')) {
+    function alegra_cr_get_option($key, $default = null)
+    {
+        if (strpos($key, 'alegra_cr_') !== 0) {
+            $key = 'alegra_cr_' . $key;
+        }
+        
+        $value = get_option($key);
+        
+        if ($value === false || $value === null || $value === '') {
+            return $default;
+        }
+        
+        // Intentar decodificar JSON
+        if (is_string($value) && strlen($value) > 0) {
+            $decoded = json_decode($value, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                return $decoded;
+            }
+        }
+        
+        return $value;
+    }
+}
+
+if (!function_exists('alegra_cr_get_all_settings')) {
+    function alegra_cr_get_all_settings()
+    {
+        return [
+            'alegra_email' => alegra_cr_get_option('email', ''),
+            'alegra_token' => alegra_cr_get_option('token', ''),
+            'auto_transmit_enabled' => alegra_cr_get_option('auto_transmit_enabled', '0'),
+            'auto_transmit_payment_methods' => alegra_cr_get_option('auto_transmit_payment_methods', []),
+            'auto_transmit_medical_only' => alegra_cr_get_option('auto_transmit_medical_only', '0'),
+            'auto_detect_medical_services' => alegra_cr_get_option('auto_detect_medical_services', '1'),
+            'notify_auto_transmit' => alegra_cr_get_option('notify_auto_transmit', '1'),
+            'medical_keywords' => alegra_cr_get_option('medical_keywords', 'consulta,examen,chequeo,revisión,diagnóstico,cirugía,operación,procedimiento,terapia,sesión,doctor,médico,especialista,evaluación'),
+            'auto_transmit_delay' => alegra_cr_get_option('auto_transmit_delay', '0'),
+            'card_payment_methods' => alegra_cr_get_option('card_payment_methods', []),
+            'cash_payment_methods' => alegra_cr_get_option('cash_payment_methods', []),
+            'default_printer_type' => alegra_cr_get_option('default_printer_type') ?: 'web',
+            'thermal_printer_ip' => alegra_cr_get_option('thermal_printer_ip') ?: '192.168.1.100',
+            'thermal_printer_port' => alegra_cr_get_option('thermal_printer_port') ?: '9100',
+            'ticket_width' => alegra_cr_get_option('ticket_width') ?: '48',
+            'auto_print' => alegra_cr_get_option('auto_print') ?: '1',
+            'logo_width' => alegra_cr_get_option('logo_width') ?: '120',
+            'logo_height' => alegra_cr_get_option('logo_height') ?: '70',
+            'print_logo' => alegra_cr_get_option('print_logo') ?: '1',
+            'company_logo_path' => alegra_cr_get_option('company_logo_path') ?: '',
+            'print_footer_message' => alegra_cr_get_option('print_footer_message') ?: '',
+            'footer_conditions' => alegra_cr_get_option('footer_conditions') ?: '',
+            'show_footer_conditions' => alegra_cr_get_option('show_footer_conditions') ?: '1',
+            'show_footer_conditions_ticket' => alegra_cr_get_option('show_footer_conditions_ticket') ?: '1',
+            'footer_legal_text' => alegra_cr_get_option('footer_legal_text') ?: ''
+        ];
+    }
+}
+
+if (!function_exists('alegra_cr_get_payment_config')) {
+    function alegra_cr_get_payment_config()
+    {
+        $card_methods = alegra_cr_get_option('card_payment_methods', []);
+        $cash_methods = alegra_cr_get_option('cash_payment_methods', []);
+        
+        // Asegurar que sean arrays
+        if (is_string($card_methods)) {
+            $card_methods = json_decode($card_methods, true);
+        }
+        if (is_string($cash_methods)) {
+            $cash_methods = json_decode($cash_methods, true);
+        }
+        
+        return [
+            'card_payment_methods' => is_array($card_methods) ? $card_methods : [],
+            'cash_payment_methods' => is_array($cash_methods) ? $cash_methods : []
+        ];
+    }
+}
+
+if (!function_exists('alegra_cr_save_payment_config')) {
+    function alegra_cr_save_payment_config($config)
+    {
+        log_message('error', json_encode($config));
+        alegra_cr_save_option('card_payment_methods', $config['card_payment_methods']);
+        alegra_cr_save_option('cash_payment_methods', $config['cash_payment_methods']);
+        return true;
+    }
+}
+
 /**
  * Obtiene la configuración actual de Alegra CR
  */
 function alegra_cr_get_current_settings()
 {
-    return [
-        'alegra_email' => get_option('alegra_cr_email'),
-        'alegra_token' => '', // Por seguridad no mostrar
-        'auto_transmit_enabled' => get_option('alegra_cr_auto_transmit_enabled'),
-        'auto_transmit_payment_methods' => get_option('alegra_cr_auto_transmit_payment_methods'),
-        'auto_transmit_medical_only' => get_option('alegra_cr_auto_transmit_medical_only'),
-        'auto_detect_medical_services' => get_option('alegra_cr_auto_detect_medical_services'),
-        'notify_auto_transmit' => get_option('alegra_cr_notify_auto_transmit'),
-        'medical_keywords' => get_option('alegra_cr_medical_keywords'),
-        'auto_transmit_delay' => get_option('alegra_cr_auto_transmit_delay')
-    ];
+    return alegra_cr_get_all_settings();
 }
+
 
 /**
  * Obtiene los métodos de pago activos de Perfex
@@ -339,26 +444,7 @@ function alegra_cr_get_payment_modes()
  */
 function alegra_cr_save_payment_methods_config($config)
 {
-    $CI = &get_instance();
-    
-    try {
-        // Actualizar métodos de tarjeta
-        $CI->db->where('config_type', 'card_payment_methods');
-        $CI->db->update(db_prefix() . 'alegra_cr_payment_methods_config', [
-            'payment_method_ids' => json_encode($config['card_payment_methods'])
-        ]);
-        
-        // Actualizar métodos de efectivo
-        $CI->db->where('config_type', 'cash_payment_methods');
-        $CI->db->update(db_prefix() . 'alegra_cr_payment_methods_config', [
-            'payment_method_ids' => json_encode($config['cash_payment_methods'])
-        ]);
-        
-        return true;
-    } catch (Exception $e) {
-        log_message('error', 'Alegra CR: Error guardando configuración de pagos: ' . $e->getMessage());
-        return false;
-    }
+    return alegra_cr_save_payment_config($config);
 }
 
 /**
@@ -366,26 +452,8 @@ function alegra_cr_save_payment_methods_config($config)
  */
 function alegra_cr_get_payment_methods_config()
 {
-    $CI = &get_instance();
-    $payment_config = ['card_payment_methods' => [], 'cash_payment_methods' => []];
-    
-    try {
-        if ($CI->db->table_exists(db_prefix() . 'alegra_cr_payment_methods_config')) {
-            $card_methods = $CI->db->get_where(db_prefix() . 'alegra_cr_payment_methods_config', ['config_type' => 'card_payment_methods'])->row();
-            $cash_methods = $CI->db->get_where(db_prefix() . 'alegra_cr_payment_methods_config', ['config_type' => 'cash_payment_methods'])->row();
-            
-            $payment_config = [
-                'card_payment_methods' => $card_methods ? json_decode($card_methods->payment_method_ids, true) : [],
-                'cash_payment_methods' => $cash_methods ? json_decode($cash_methods->payment_method_ids, true) : []
-            ];
-        }
-    } catch (Exception $e) {
-        log_message('error', 'Alegra CR: Error obteniendo configuración de métodos de pago: ' . $e->getMessage());
-    }
-    
-    return $payment_config;
+    return alegra_cr_get_payment_config();
 }
-
 /**
  * Verifica si el módulo está completamente configurado
  */

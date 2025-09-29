@@ -13,148 +13,59 @@ class Alegra_facturacion_cr extends AdminController
     }
 
     /**
- * Método para configuración administrativa directa
- */
-public function admin_settings()
-{
-    if (!has_permission('alegra_cr', '', 'view')) {
-        access_denied('alegra_cr');
-    }
-    
-    // Procesar formulario si se envía
-    if ($this->input->post()) {
-        $this->process_admin_settings();
-        return;
-    }
-    
-    // Cargar datos necesarios
-    $data = $this->get_settings_data();
-    $data['title'] = 'Configuración de Alegra Costa Rica';
-    
-    $this->load->view('alegra_facturacion_cr/admin_settings_full', $data);
-}
-
-/**
- * Obtener contenido de settings via AJAX
- */
-public function get_settings_content()
-{
-    if (!$this->input->is_ajax_request()) {
-        show_404();
-    }
-    
-    if (!has_permission('alegra_cr', '', 'view')) {
-        http_response_code(403);
-        echo 'Sin permisos';
-        return;
-    }
-    
-    // Obtener datos
-    $data = $this->get_settings_data();
-    
-    // Renderizar solo el contenido de las pestañas
-    echo $this->load->view('alegra_facturacion_cr/admin_settings_tab', $data, true);
-}
-
-/**
- * Procesar configuraciones administrativas
- */
-private function process_admin_settings()
-{
-    $post_data = $this->input->post();
-    
-    // Mapeo de campos del formulario a opciones de Perfex
-    $settings_map = [
-        'alegra_email' => 'alegra_cr_email',
-        'alegra_token' => 'alegra_cr_token',
-        'auto_transmit_enabled' => 'alegra_cr_auto_transmit_enabled',
-        'auto_transmit_payment_methods' => 'alegra_cr_auto_transmit_payment_methods',
-        'auto_transmit_medical_only' => 'alegra_cr_auto_transmit_medical_only',
-        'auto_detect_medical_services' => 'alegra_cr_auto_detect_medical_services',
-        'notify_auto_transmit' => 'alegra_cr_notify_auto_transmit',
-        'medical_keywords' => 'alegra_cr_medical_keywords',
-        'auto_transmit_delay' => 'alegra_cr_auto_transmit_delay'
-    ];
-    
-    $processed_count = 0;
-    
-    foreach ($settings_map as $form_field => $option_name) {
-        if (isset($post_data[$form_field])) {
-            $value = $post_data[$form_field];
-            
-            // Procesar arrays
-            if (is_array($value)) {
-                $value = json_encode(array_filter($value));
-            }
-            
-            // No guardar token vacío
-            if ($form_field === 'alegra_token' && empty($value)) {
-                continue;
-            }
-            
-            update_option($option_name, $value);
-            $processed_count++;
-        } else {
-            // Checkboxes no marcados
-            $checkbox_fields = ['auto_transmit_enabled', 'auto_transmit_medical_only', 'auto_detect_medical_services', 'notify_auto_transmit'];
-            if (in_array($form_field, $checkbox_fields)) {
-                update_option($option_name, '0');
-                $processed_count++;
-            }
+     * Método para configuración administrativa directa
+     */
+    public function admin_settings()
+    {
+        if (!has_permission('alegra_cr', '', 'view')) {
+            access_denied('alegra_cr');
         }
-    }
-    
-    // Procesar métodos de pago
-    if (isset($post_data['card_payment_methods']) || isset($post_data['cash_payment_methods'])) {
-        $this->load->model('alegra_cr_model');
-        
-        $payment_config = [
-            'card_payment_methods' => isset($post_data['card_payment_methods']) ? array_filter($post_data['card_payment_methods']) : [],
-            'cash_payment_methods' => isset($post_data['cash_payment_methods']) ? array_filter($post_data['cash_payment_methods']) : []
-        ];
-        
-        $this->alegra_cr_model->save_payment_methods_config($payment_config);
-    }
-    
-    if ($processed_count > 0) {
-        set_alert('success', "Configuración guardada exitosamente ({$processed_count} elementos)");
-    } else {
-        set_alert('warning', 'No se procesaron cambios');
-    }
-    
-    redirect(admin_url('alegra_facturacion_cr/admin_settings'));
-}
 
-/**
- * Obtener todos los datos necesarios para la configuración
- */
-private function get_settings_data()
+        // Procesar formulario si se envía
+        if ($this->input->post()) {
+            $this->process_admin_settings();
+            return;
+        }
+
+        // Cargar datos necesarios
+        $data = $this->get_settings_data();
+        $data['title'] = 'Configuración de Alegra Costa Rica';
+
+        $this->load->view('alegra_facturacion_cr/admin_settings_full', $data);
+    }
+
+    /**
+     * Obtener contenido de settings via AJAX
+     */
+    public function get_settings_content()
+    {
+        if (!$this->input->is_ajax_request()) {
+            show_404();
+        }
+
+        if (!has_permission('alegra_cr', '', 'view')) {
+            http_response_code(403);
+            echo 'Sin permisos';
+            return;
+        }
+
+        // Obtener datos
+        $data = $this->get_settings_data();
+
+        // Renderizar solo el contenido de las pestañas
+        echo $this->load->view('alegra_facturacion_cr/admin_settings_tab', $data, true);
+    }
+
+    private function get_settings_data()
 {
-    // Obtener configuraciones desde las opciones de Perfex
-    $settings = [
-        'alegra_email' => get_option('alegra_cr_email'),
-        'alegra_token' => '', // Por seguridad no mostrar
-        'auto_transmit_enabled' => get_option('alegra_cr_auto_transmit_enabled'),
-        'auto_transmit_payment_methods' => get_option('alegra_cr_auto_transmit_payment_methods'),
-        'auto_transmit_medical_only' => get_option('alegra_cr_auto_transmit_medical_only'),
-        'auto_detect_medical_services' => get_option('alegra_cr_auto_detect_medical_services'),
-        'notify_auto_transmit' => get_option('alegra_cr_notify_auto_transmit'),
-        'medical_keywords' => get_option('alegra_cr_medical_keywords'),
-        'auto_transmit_delay' => get_option('alegra_cr_auto_transmit_delay')
-    ];
+    // Usar helper unificado
+    $settings = alegra_cr_get_all_settings();
     
-    // Obtener métodos de pago
+    // Obtener métodos de pago de Perfex
     $perfex_payment_modes = $this->db->get_where('payment_modes', ['active' => 1])->result_array();
     
-    // Obtener configuración de métodos de pago del módulo
-    $payment_config = [];
-    try {
-        $this->load->model('alegra_cr_model');
-        $payment_config = $this->alegra_cr_model->get_payment_methods_config();
-    } catch (Exception $e) {
-        // Si no se puede cargar el modelo, usar configuración vacía
-        $payment_config = ['card_payment_methods' => [], 'cash_payment_methods' => []];
-    }
+    // Obtener configuración de métodos de pago (desde options)
+    $payment_config = alegra_cr_get_payment_config();
     
     return [
         'settings' => $settings,
@@ -163,76 +74,146 @@ private function get_settings_data()
     ];
 }
 
-/**
- * Verificar estado del sistema
- */
-public function system_status()
-{
-    if (!has_permission('alegra_cr', '', 'view')) {
-        access_denied('alegra_cr');
-    }
-    
-    $status = [];
-    
-    // Verificar tablas
-    $tables = ['alegra_cr_settings', 'alegra_cr_invoices_map', 'alegra_cr_payment_methods_config'];
-    foreach ($tables as $table) {
-        $status['tables'][$table] = $this->db->table_exists(db_prefix() . $table);
-    }
-    
-    // Verificar opciones
-    $options = ['alegra_cr_email', 'alegra_cr_token', 'alegra_cr_auto_transmit_enabled'];
-    foreach ($options as $option) {
-        $status['options'][$option] = get_option($option) !== false;
-    }
-    
-    // Verificar configuración API
-    $status['api_configured'] = !empty(get_option('alegra_cr_email')) && !empty(get_option('alegra_cr_token'));
-    
-    header('Content-Type: application/json');
-    echo json_encode($status, JSON_PRETTY_PRINT);
-}
 
 /**
- * Forzar recreación de opciones
+ * Procesar configuraciones administrativas
  */
-public function recreate_options()
+private function process_admin_settings()
 {
-    if (!has_permission('alegra_cr', '', 'edit')) {
-        access_denied('alegra_cr');
-    }
+    $post_data = $this->input->post();
     
-    $options = [
-        'alegra_cr_email' => '',
-        'alegra_cr_token' => '',
-        'alegra_cr_auto_transmit_enabled' => '0',
-        'alegra_cr_auto_transmit_payment_methods' => '[]',
-        'alegra_cr_auto_transmit_medical_only' => '0',
-        'alegra_cr_auto_detect_medical_services' => '1',
-        'alegra_cr_notify_auto_transmit' => '1',
-        'alegra_cr_medical_keywords' => 'consulta,examen,chequeo,revisión,diagnóstico,cirugía,operación,procedimiento,terapia,sesión,doctor,médico,especialista,evaluación',
-        'alegra_cr_auto_transmit_delay' => '0'
+    log_message('error', 'Alegra CR: POST data recibida: ' . json_encode($post_data));
+    
+    $saved_count = 0;
+    
+    // Mapeo directo de campos del formulario a claves de options
+    $field_mapping = [
+        'alegra_email' => 'email',
+        'alegra_token' => 'token',
+        'auto_transmit_enabled' => 'auto_transmit_enabled',
+        'auto_transmit_payment_methods' => 'auto_transmit_payment_methods',
+        'auto_transmit_medical_only' => 'auto_transmit_medical_only',
+        'auto_detect_medical_services' => 'auto_detect_medical_services',
+        'notify_auto_transmit' => 'notify_auto_transmit',
+        'medical_keywords' => 'medical_keywords',
+        'auto_transmit_delay' => 'auto_transmit_delay'
     ];
     
-    $created = 0;
-    $updated = 0;
-    
-    foreach ($options as $name => $default_value) {
-        if (get_option($name) === false) {
-            add_option($name, $default_value);
-            $created++;
+    // Procesar cada campo
+    foreach ($field_mapping as $form_field => $option_key) {
+        if (isset($post_data[$form_field])) {
+            $value = $post_data[$form_field];
+            
+            // No guardar token vacío
+            if ($form_field === 'alegra_token' && empty($value)) {
+                continue;
+            }
+            
+            // Guardar usando función unificada
+            if (alegra_cr_save_option($option_key, $value)) {
+                $saved_count++;
+            }
         } else {
-            // Actualizar si está vacío
-            if (empty(get_option($name)) && !empty($default_value)) {
-                update_option($name, $default_value);
-                $updated++;
+            // Checkboxes no marcados
+            $checkbox_fields = ['auto_transmit_enabled', 'auto_transmit_medical_only', 'auto_detect_medical_services', 'notify_auto_transmit'];
+            if (in_array($form_field, $checkbox_fields)) {
+                alegra_cr_save_option($option_key, '0');
+                $saved_count++;
             }
         }
     }
     
-    set_alert('success', "Opciones recreadas: {$created} creadas, {$updated} actualizadas");
+    // Procesar métodos de pago (unificado)
+    if (isset($post_data['card_payment_methods']) || isset($post_data['cash_payment_methods'])) {
+        $payment_config = [
+            'card_payment_methods' => isset($post_data['card_payment_methods']) ? array_filter($post_data['card_payment_methods']) : [],
+            'cash_payment_methods' => isset($post_data['cash_payment_methods']) ? array_filter($post_data['cash_payment_methods']) : []
+        ];
+        
+        if (alegra_cr_save_payment_config($payment_config)) {
+            $saved_count += 2;
+        }
+    }
+    
+    if ($saved_count > 0) {
+        set_alert('success', "Configuración guardada exitosamente ({$saved_count} elementos)");
+    } else {
+        set_alert('warning', 'No se procesaron cambios');
+    }
+    
     redirect(admin_url('alegra_facturacion_cr/admin_settings'));
 }
+
+    /**
+     * Verificar estado del sistema
+     */
+    public function system_status()
+    {
+        if (!has_permission('alegra_cr', '', 'view')) {
+            access_denied('alegra_cr');
+        }
+
+        $status = [];
+
+        // Verificar tablas
+        $tables = ['alegra_cr_settings', 'alegra_cr_invoices_map', 'alegra_cr_payment_methods_config'];
+        foreach ($tables as $table) {
+            $status['tables'][$table] = $this->db->table_exists(db_prefix() . $table);
+        }
+
+        // Verificar opciones
+        $options = ['alegra_cr_email', 'alegra_cr_token', 'alegra_cr_auto_transmit_enabled'];
+        foreach ($options as $option) {
+            $status['options'][$option] = get_option($option) !== false;
+        }
+
+        // Verificar configuración API
+        $status['api_configured'] = !empty(get_option('alegra_cr_email')) && !empty(get_option('alegra_cr_token'));
+
+        header('Content-Type: application/json');
+        echo json_encode($status, JSON_PRETTY_PRINT);
+    }
+
+    /**
+     * Forzar recreación de opciones
+     */
+    public function recreate_options()
+    {
+        if (!has_permission('alegra_cr', '', 'edit')) {
+            access_denied('alegra_cr');
+        }
+
+        $options = [
+            'alegra_cr_email' => '',
+            'alegra_cr_token' => '',
+            'alegra_cr_auto_transmit_enabled' => '0',
+            'alegra_cr_auto_transmit_payment_methods' => '[]',
+            'alegra_cr_auto_transmit_medical_only' => '0',
+            'alegra_cr_auto_detect_medical_services' => '1',
+            'alegra_cr_notify_auto_transmit' => '1',
+            'alegra_cr_medical_keywords' => 'consulta,examen,chequeo,revisión,diagnóstico,cirugía,operación,procedimiento,terapia,sesión,doctor,médico,especialista,evaluación',
+            'alegra_cr_auto_transmit_delay' => '0'
+        ];
+
+        $created = 0;
+        $updated = 0;
+
+        foreach ($options as $name => $default_value) {
+            if (get_option($name) === false) {
+                add_option($name, $default_value);
+                $created++;
+            } else {
+                // Actualizar si está vacío
+                if (empty(get_option($name)) && !empty($default_value)) {
+                    update_option($name, $default_value);
+                    $updated++;
+                }
+            }
+        }
+
+        set_alert('success', "Opciones recreadas: {$created} creadas, {$updated} actualizadas");
+        redirect(admin_url('alegra_facturacion_cr/admin_settings'));
+    }
 
     public function index()
     {
@@ -647,7 +628,6 @@ public function recreate_options()
                 'iva_return_applied' => !empty($iva_return_items),
                 'total_iva_return' => !empty($iva_return_items) ? array_sum(array_column($iva_return_items, 'return_amount')) : 0
             ];
-
         } else {
             $this->alegra_cr_model->update_invoice_map_status(
                 $invoice_id,
@@ -1704,7 +1684,6 @@ public function recreate_options()
                 }
 
                 echo json_encode($response);
-
             } else {
                 $error_message = 'Error al obtener impuestos de Alegra';
 
@@ -1722,7 +1701,6 @@ public function recreate_options()
                     'details' => is_array($result) ? $result : []
                 ]);
             }
-
         } catch (Exception $e) {
             log_message('error', 'Excepción en sync_taxes_from_alegra: ' . $e->getMessage());
 
@@ -1795,7 +1773,6 @@ public function recreate_options()
                 'issues_found' => count($issues),
                 'issues' => $issues
             ]);
-
         } catch (Exception $e) {
             log_message('error', 'Error en validate_synced_taxes: ' . $e->getMessage());
             echo json_encode([
@@ -1858,7 +1835,6 @@ public function recreate_options()
                 'test_results' => $test_results,
                 'total_configured_methods' => count($debug_info['configured_methods'])
             ]);
-
         } catch (Exception $e) {
             echo json_encode([
                 'success' => false,
@@ -1929,7 +1905,6 @@ public function recreate_options()
                 'medical_services_check' => $medical_check,
                 'config' => $this->alegra_cr_model->get_auto_transmit_debug_info()
             ]);
-
         } catch (Exception $e) {
             echo json_encode([
                 'success' => false,
@@ -2083,7 +2058,6 @@ public function recreate_options()
                 'tax_config' => $tax_config,
                 'stats' => $this->alegra_cr_model->get_auto_transmit_stats()
             ]);
-
         } catch (Exception $e) {
             echo json_encode([
                 'success' => false,
@@ -2156,7 +2130,6 @@ public function recreate_options()
                     'Configuración de Alegra Costa Rica guardada exitosamente' :
                     'Error al guardar la configuración'
             ]);
-
         } catch (Exception $e) {
             echo json_encode([
                 'success' => false,

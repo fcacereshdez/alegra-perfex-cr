@@ -12,7 +12,7 @@ class Alegra_cr_model extends App_Model
         parent::__construct();
 
         // Definir nombres de tablas
-        $this->settings_table = db_prefix() . 'alegra_cr_settings';
+        $this->settings_table = db_prefix() . 'options';
         $this->invoices_map_table = db_prefix() . 'alegra_cr_invoices_map';
         $this->products_map_table = db_prefix() . 'alegra_cr_products_map';
 
@@ -28,6 +28,7 @@ class Alegra_cr_model extends App_Model
      */
     public function get_all_settings()
     {
+
         $settings = [];
         $query = $this->db->get($this->settings_table);
 
@@ -60,24 +61,20 @@ class Alegra_cr_model extends App_Model
      */
     public function get_setting($setting_name, $default = null)
     {
+        log_message("error", "Table named " . $this->settings_table . " has called");
+        log_message("error", "Settings named " . $setting_name . " has called");
         $result = $this->db->get_where($this->settings_table, [
-            'setting_name' => $setting_name
+            'name' => $setting_name
         ])->row();
+
+        log_message("error", "Setting say: " . json_encode($result));
 
         if (!$result) {
             return $default;
         }
 
-        $value = $result->setting_value;
+        $value = $result->value;
 
-        // Desencriptar token
-        if ($setting_name === 'alegra_token' && !empty($value)) {
-            try {
-                $value = $this->encryption->decrypt($value);
-            } catch (Exception $e) {
-                return $default;
-            }
-        }
 
         // Decodificar JSON
         if ($this->is_json($value)) {
@@ -93,6 +90,7 @@ class Alegra_cr_model extends App_Model
      */
     public function save_setting($setting_name, $value)
     {
+        log_message("error", "Aqui anda la data we");
         // Encriptar token si es necesario
         if ($setting_name === 'alegra_token' && !empty($value)) {
             $value = $this->encryption->encrypt($value);
@@ -201,8 +199,8 @@ class Alegra_cr_model extends App_Model
      */
     public function get_api_credentials()
     {
-        $email = $this->get_setting('alegra_email');
-        $token = $this->get_setting('alegra_token');
+        $email = $this->get_setting('alegra_cr_email');
+        $token = $this->get_setting('alegra_cr_token');
 
         if (empty($email) || empty($token)) {
             return null;
@@ -287,67 +285,68 @@ class Alegra_cr_model extends App_Model
         return false;
     }
 
-    /**
-     * Evalúa si una factura debe auto-transmitirse
-     */
-    public function should_auto_transmit_invoice($invoice)
-    {
-        // 1. Verificar si está habilitado
-        if (!$this->is_auto_transmit_enabled()) {
-            return [
-                'should_transmit' => false,
-                'reason' => 'Auto-transmisión deshabilitada'
-            ];
-        }
-
-        // 2. Obtener métodos configurados
-        $configured_methods = $this->get_auto_transmit_payment_methods();
-
-        if (empty($configured_methods)) {
-            return [
-                'should_transmit' => false,
-                'reason' => 'No hay métodos de pago configurados'
-            ];
-        }
-
-        // 3. Verificar métodos de pago de la factura
-        $invoice_methods = $this->get_invoice_payment_methods($invoice);
-        $method_match = false;
-        $matched_method = null;
-
-        foreach ($invoice_methods as $method_id) {
-            if (in_array((string)$method_id, $configured_methods)) {
-                $method_match = true;
-                $matched_method = $method_id;
-                break;
-            }
-        }
-
-        if (!$method_match) {
-            return [
-                'should_transmit' => false,
-                'reason' => 'Método de pago no configurado',
-                'invoice_methods' => $invoice_methods,
-                'configured_methods' => $configured_methods
-            ];
-        }
-
-        // 4. Verificar servicios médicos si está configurado
-        if ($this->is_medical_only_auto_transmit()) {
-            if (!$this->invoice_has_medical_services($invoice->id)) {
-                return [
-                    'should_transmit' => false,
-                    'reason' => 'Solo médicos habilitado y factura no los tiene'
-                ];
-            }
-        }
-
+/**
+ * Verificar si una factura debe auto-transmitirse (actualizado)
+ */
+public function should_auto_transmit_invoice($invoice)
+{
+    // 1. Verificar si está habilitado
+    if (!$this->is_auto_transmit_enabled()) {
         return [
-            'should_transmit' => true,
-            'reason' => 'Cumple todos los criterios',
-            'matched_method' => $matched_method
+            'should_transmit' => false,
+            'reason' => 'Auto-transmisión deshabilitada'
         ];
     }
+    
+    // 2. Obtener métodos configurados para auto-transmisión (NO devolución IVA)
+    $config = $this->get_payment_methods_config_v2();
+    $configured_methods = $config['auto_transmit_methods'];
+    
+    if (empty($configured_methods)) {
+        return [
+            'should_transmit' => false,
+            'reason' => 'No hay métodos de pago configurados para auto-transmisión'
+        ];
+    }
+    
+    // 3. Verificar métodos de pago de la factura
+    $invoice_methods = $this->get_invoice_payment_methods($invoice);
+    $method_match = false;
+    $matched_method = null;
+    
+    foreach ($invoice_methods as $method_id) {
+        if (in_array((string)$method_id, $configured_methods)) {
+            $method_match = true;
+            $matched_method = $method_id;
+            break;
+        }
+    }
+    
+    if (!$method_match) {
+        return [
+            'should_transmit' => false,
+            'reason' => 'Método de pago no configurado para auto-transmisión',
+            'invoice_methods' => $invoice_methods,
+            'configured_methods' => $configured_methods
+        ];
+    }
+    
+    // 4. Verificar servicios médicos si está configurado
+    if ($this->is_medical_only_auto_transmit()) {
+        if (!$this->invoice_has_medical_services($invoice->id)) {
+            return [
+                'should_transmit' => false,
+                'reason' => 'Solo médicos habilitado y factura no contiene servicios médicos'
+            ];
+        }
+    }
+    
+    return [
+        'should_transmit' => true,
+        'reason' => 'Cumple todos los criterios para auto-transmisión',
+        'matched_method' => $matched_method
+    ];
+}
 
     /**
      * Obtiene métodos de pago de una factura
@@ -530,4 +529,26 @@ class Alegra_cr_model extends App_Model
         json_decode($string);
         return (json_last_error() == JSON_ERROR_NONE);
     }
+
+    /**
+ * Método actualizado en el modelo para obtener configuración V2
+ */
+public function get_payment_methods_config_v2()
+{
+    $auto_transmit = $this->get_setting('alegra_cr_auto_transmit_payment_methods', []);
+    $iva_return = $this->get_setting('alegra_cr_iva_return_payment_methods', []);
+    
+    // Asegurar que sean arrays
+    if (is_string($auto_transmit)) {
+        $auto_transmit = json_decode($auto_transmit, true);
+    }
+    if (is_string($iva_return)) {
+        $iva_return = json_decode($iva_return, true);
+    }
+    
+    return [
+        'auto_transmit_methods' => is_array($auto_transmit) ? $auto_transmit : [],
+        'iva_return_methods' => is_array($iva_return) ? $iva_return : []
+    ];
+}
 }

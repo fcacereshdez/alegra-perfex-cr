@@ -10,6 +10,237 @@ defined('BASEPATH') or exit('No direct script access allowed');
 hooks()->add_action('after_invoice_added', 'alegra_cr_auto_transmit_invoice_flexible');
 hooks()->add_action('after_invoice_updated', 'alegra_cr_auto_transmit_invoice_flexible');
 
+/**
+ * Hook actualizado para auto-transmisión con lógica separada
+ */
+function alegra_cr_auto_transmit_invoice_v2($invoice_id)
+{
+    log_message('error', '=== ALEGRA CR HOOK V2 INICIADO === Factura ID: ' . $invoice_id);
+    
+    if (empty($invoice_id) || !is_numeric($invoice_id)) {
+        log_message('error', 'Alegra CR: ID de factura inválido');
+        return;
+    }
+    
+    try {
+        $CI = &get_instance();
+        
+        // Cargar modelo si no está cargado
+        if (!isset($CI->alegra_cr_model)) {
+            $model_path = APPPATH . 'modules/alegra_facturacion_cr/models/Alegra_cr_model.php';
+            if (file_exists($model_path)) {
+                require_once($model_path);
+                $CI->alegra_cr_model = new Alegra_cr_model();
+            }
+        }
+        
+        // Obtener factura
+        $invoice = $CI->db->get_where('invoices', ['id' => $invoice_id])->row();
+        if (!$invoice) {
+            log_message('error', 'Alegra CR: Factura no encontrada');
+            return;
+        }
+        
+        // Verificar si ya está procesada
+        $existing = $CI->db->get_where('alegra_cr_invoices_map', [
+            'perfex_invoice_id' => $invoice_id,
+            'status' => 'completed'
+        ])->row();
+        
+        if ($existing) {
+            log_message('error', 'Alegra CR: Factura ya procesada');
+            return;
+        }
+        
+        // Obtener configuración V2
+        $auto_transmit_enabled = alegra_cr_get_option('auto_transmit_enabled');
+        if ($auto_transmit_enabled !== '1') {
+            log_message('error', 'Alegra CR: Auto-transmisión deshabilitada');
+            return;
+        }
+        
+        // Obtener métodos configurados para AUTO-TRANSMISIÓN (no IVA)
+        $auto_transmit_methods_json = alegra_cr_get_option('auto_transmit_payment_methods');
+        $auto_transmit_methods = json_decode($auto_transmit_methods_json, true);
+        
+        if (empty($auto_transmit_methods)) {
+            log_message('error', 'Alegra CR: Sin métodos de auto-transmisión configurados');
+            return;
+        }
+        
+        log_message('error', 'Alegra CR: Métodos auto-transmisión: ' . json_encode($auto_transmit_methods));
+        
+        // Verificar métodos de la factura
+        $invoice_methods = [];
+        if (isset($invoice->allowed_payment_modes) && !empty($invoice->allowed_payment_modes)) {
+            $allowed_modes = is_string($invoice->allowed_payment_modes) ?
+                unserialize($invoice->allowed_payment_modes) :
+                $invoice->allowed_payment_modes;
+            
+            if (is_array($allowed_modes)) {
+                $invoice_methods = array_map('strval', $allowed_modes);
+            }
+        }
+        
+        log_message('error', 'Alegra CR: Métodos en factura: ' . json_encode($invoice_methods));
+        
+        // Verificar coincidencia con auto-transmisión
+        $should_transmit = false;
+        $matched_method = null;
+        
+        foreach ($invoice_methods as $method_id) {
+            if (in_array($method_id, $auto_transmit_methods)) {
+                $should_transmit = true;
+                $matched_method = $method_id;
+                break;
+            }
+        }
+        
+        if (!$should_transmit) {
+            log_message('error', 'Alegra CR: Método de pago no configurado para auto-transmisión');
+            return;
+        }
+        
+        // Verificar si solo médicos
+        $medical_only = alegra_cr_get_option('auto_transmit_medical_only');
+        if ($medical_only === '1') {
+            $has_medical = check_medical_services($CI, $invoice_id);
+            if (!$has_medical) {
+                log_message('error', 'Alegra CR: Solo médicos habilitado pero sin servicios médicos');
+                return;
+            }
+        }
+        
+        log_message('error', 'Alegra CR: INICIANDO AUTO-TRANSMISIÓN');
+        log_message('error', 'Alegra CR: Método coincidente: ' . $matched_method);
+        
+        // Verificar si el método también tiene devolución IVA
+        $iva_return_methods_json = alegra_cr_get_option('iva_return_payment_methods');
+        $iva_return_methods = json_decode($iva_return_methods_json, true);
+        $has_iva_return = in_array($matched_method, $iva_return_methods ?: []);
+        
+        if ($has_iva_return) {
+            log_message('error', 'Alegra CR: Método ' . $matched_method . ' también tiene devolución IVA 4%');
+        }
+        
+        // Ejecutar transmisión
+        $result = execute_auto_transmit($invoice_id);
+        
+        if ($result && isset($result['success']) && $result['success']) {
+            log_message('error', 'Alegra CR: ✓✓✓ AUTO-TRANSMISIÓN EXITOSA ✓✓✓');
+            
+            // Agregar nota
+            $notify = alegra_cr_get_option('notify_auto_transmit');
+            if ($notify === '1') {
+                add_transmit_note($CI, $invoice_id, $matched_method, $has_iva_return);
+            }
+        } else {
+            log_message('error', 'Alegra CR: ✗✗✗ ERROR EN AUTO-TRANSMISIÓN ✗✗✗');
+        }
+        
+    } catch (Exception $e) {
+        log_message('error', 'Alegra CR: Excepción: ' . $e->getMessage());
+    }
+}
+
+/**
+ * Verificar servicios médicos
+ */
+function check_medical_services($CI, $invoice_id)
+{
+    $items = $CI->db->get_where('itemable', [
+        'rel_id' => $invoice_id,
+        'rel_type' => 'invoice'
+    ])->result_array();
+    
+    $keywords = alegra_cr_get_option('medical_keywords');
+    $keywords_array = array_map('trim', explode(',', $keywords));
+    
+    foreach ($items as $item) {
+        $description = strtolower($item['description']);
+        foreach ($keywords_array as $keyword) {
+            if (strpos($description, strtolower($keyword)) !== false) {
+                return true;
+            }
+        }
+    }
+    
+    return false;
+}
+
+/**
+ * Agregar nota de transmisión
+ */
+function add_transmit_note($CI, $invoice_id, $method_id, $has_iva_return)
+{
+    $payment_mode = $CI->db->get_where('payment_modes', ['id' => $method_id])->row();
+    $payment_name = $payment_mode ? $payment_mode->name : 'Método #' . $method_id;
+    
+    $note_text = sprintf(
+        'Factura transmitida automáticamente a Alegra CR%s el %s',
+        $has_iva_return ? ' (con IVA 4% para servicios médicos)' : '',
+        date('Y-m-d H:i:s')
+    );
+    $note_text .= "\nMétodo de pago: " . $payment_name;
+    
+    $CI->db->insert('notes', [
+        'rel_id' => $invoice_id,
+        'rel_type' => 'invoice',
+        'description' => $note_text,
+        'addedfrom' => 0,
+        'dateadded' => date('Y-m-d H:i:s')
+    ]);
+}
+
+/**
+ * Ejecutar transmisión
+ */
+function execute_auto_transmit($invoice_id)
+{
+    try {
+        $base_url = rtrim(site_url(), '/');
+        $endpoint_url = $base_url . '/admin/alegra_facturacion_cr/create_electronic_invoice/' . $invoice_id . '/normal';
+        log_message("error", "URL para enviar: " . $endpoint_url);
+        
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL => $endpoint_url,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 60,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_HTTPGET => true
+        ]);
+        
+        $response = curl_exec($ch);
+        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curl_error = curl_error($ch);
+        curl_close($ch);
+        
+        log_message("error", "cURL result: " . json_encode($response));
+
+
+        if ($curl_error) {
+            return ['success' => false, 'error' => $curl_error];
+        }
+        
+        if ($http_code >= 200 && $http_code < 400) {
+            $CI = &get_instance();
+            $CI->db->replace('alegra_cr_invoices_map', [
+                'perfex_invoice_id' => $invoice_id,
+                'status' => 'completed',
+                'sync_date' => date('Y-m-d H:i:s')
+            ]);
+            
+            return ['success' => true];
+        }
+        
+        return ['success' => false, 'error' => 'HTTP ' . $http_code];
+        
+    } catch (Exception $e) {
+        return ['success' => false, 'error' => $e->getMessage()];
+    }
+}
+
 function alegra_cr_auto_transmit_invoice_flexible($invoice_id)
 {
     // Log inicial
@@ -60,7 +291,7 @@ function alegra_cr_auto_transmit_invoice_flexible($invoice_id)
         
         log_message('error', 'Alegra CR: ✓ Modelo cargado correctamente');
         
-        // 3. Obtener la factura
+
         $invoice = alegra_cr_get_invoice_from_db_debug($CI, $invoice_id);
         
         if (!$invoice) {
@@ -135,6 +366,7 @@ function alegra_cr_should_auto_transmit_direct($CI, $invoice)
         
         // 2. Obtener métodos de pago configurados para auto-transmisión
         $auto_transmit_methods_json = alegra_cr_get_setting_direct($CI, 'auto_transmit_payment_methods');
+        log_message("error", "Métodos con auto-transmisión: " . json_encode($auto_transmit_methods_json));
         $auto_transmit_methods = json_decode($auto_transmit_methods_json, true);
         
         if (empty($auto_transmit_methods) || !is_array($auto_transmit_methods)) {
@@ -406,6 +638,9 @@ function alegra_cr_invoice_already_processed_debug($CI, $invoice_id)
 
 /**
  * Ejecutar transmisión (reutilizar función existente pero con mejor logging)
+ */
+/**
+ * Ejecutar transmisión con autenticación (versión corregida)
  */
 function alegra_cr_execute_transmit_debug($invoice_id)
 {

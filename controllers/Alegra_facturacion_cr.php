@@ -2,7 +2,7 @@
 
 defined('BASEPATH') or exit('No direct script access allowed');
 
-class Alegra_facturacion_cr extends AdminController
+class Alegra_facturacion_cr extends CI_Controller
 {
     public function __construct()
     {
@@ -10,28 +10,6 @@ class Alegra_facturacion_cr extends AdminController
         $this->load->model('alegra_cr_model');
         $this->lang->load('alegra_facturacion_cr', 'english');
         $this->lang->load('alegra_facturacion_cr', 'spanish');
-    }
-
-    /**
-     * Método para configuración administrativa directa
-     */
-    public function admin_settings()
-    {
-        if (!has_permission('alegra_cr', '', 'view')) {
-            access_denied('alegra_cr');
-        }
-
-        // Procesar formulario si se envía
-        if ($this->input->post()) {
-            $this->process_admin_settings();
-            return;
-        }
-
-        // Cargar datos necesarios
-        $data = $this->get_settings_data();
-        $data['title'] = 'Configuración de Alegra Costa Rica';
-
-        $this->load->view('alegra_facturacion_cr/admin_settings_full', $data);
     }
 
     /**
@@ -57,92 +35,23 @@ class Alegra_facturacion_cr extends AdminController
     }
 
     private function get_settings_data()
-{
-    // Usar helper unificado
-    $settings = alegra_cr_get_all_settings();
-    
-    // Obtener métodos de pago de Perfex
-    $perfex_payment_modes = $this->db->get_where('payment_modes', ['active' => 1])->result_array();
-    
-    // Obtener configuración de métodos de pago (desde options)
-    $payment_config = alegra_cr_get_payment_config();
-    
-    return [
-        'settings' => $settings,
-        'perfex_payment_modes' => $perfex_payment_modes,
-        'payment_config' => $payment_config
-    ];
-}
+    {
+        // Usar helper unificado
+        $settings = alegra_cr_get_all_settings();
 
+        // Obtener métodos de pago de Perfex
+        $perfex_payment_modes = $this->db->get_where('payment_modes', ['active' => 1])->result_array();
 
-/**
- * Procesar configuraciones administrativas
- */
-private function process_admin_settings()
-{
-    $post_data = $this->input->post();
-    
-    log_message('error', 'Alegra CR: POST data recibida: ' . json_encode($post_data));
-    
-    $saved_count = 0;
-    
-    // Mapeo directo de campos del formulario a claves de options
-    $field_mapping = [
-        'alegra_email' => 'email',
-        'alegra_token' => 'token',
-        'auto_transmit_enabled' => 'auto_transmit_enabled',
-        'auto_transmit_payment_methods' => 'auto_transmit_payment_methods',
-        'auto_transmit_medical_only' => 'auto_transmit_medical_only',
-        'auto_detect_medical_services' => 'auto_detect_medical_services',
-        'notify_auto_transmit' => 'notify_auto_transmit',
-        'medical_keywords' => 'medical_keywords',
-        'auto_transmit_delay' => 'auto_transmit_delay'
-    ];
-    
-    // Procesar cada campo
-    foreach ($field_mapping as $form_field => $option_key) {
-        if (isset($post_data[$form_field])) {
-            $value = $post_data[$form_field];
-            
-            // No guardar token vacío
-            if ($form_field === 'alegra_token' && empty($value)) {
-                continue;
-            }
-            
-            // Guardar usando función unificada
-            if (alegra_cr_save_option($option_key, $value)) {
-                $saved_count++;
-            }
-        } else {
-            // Checkboxes no marcados
-            $checkbox_fields = ['auto_transmit_enabled', 'auto_transmit_medical_only', 'auto_detect_medical_services', 'notify_auto_transmit'];
-            if (in_array($form_field, $checkbox_fields)) {
-                alegra_cr_save_option($option_key, '0');
-                $saved_count++;
-            }
-        }
-    }
-    
-    // Procesar métodos de pago (unificado)
-    if (isset($post_data['card_payment_methods']) || isset($post_data['cash_payment_methods'])) {
-        $payment_config = [
-            'card_payment_methods' => isset($post_data['card_payment_methods']) ? array_filter($post_data['card_payment_methods']) : [],
-            'cash_payment_methods' => isset($post_data['cash_payment_methods']) ? array_filter($post_data['cash_payment_methods']) : []
+        // Obtener configuración de métodos de pago (desde options)
+        $payment_config = alegra_cr_get_payment_config();
+
+        return [
+            'settings' => $settings,
+            'perfex_payment_modes' => $perfex_payment_modes,
+            'payment_config' => $payment_config
         ];
-        
-        if (alegra_cr_save_payment_config($payment_config)) {
-            $saved_count += 2;
-        }
     }
-    
-    if ($saved_count > 0) {
-        set_alert('success', "Configuración guardada exitosamente ({$saved_count} elementos)");
-    } else {
-        set_alert('warning', 'No se procesaron cambios');
-    }
-    
-    redirect(admin_url('alegra_facturacion_cr/admin_settings'));
-}
+
 
     /**
      * Verificar estado del sistema
@@ -484,6 +393,8 @@ private function process_admin_settings()
     // Función mejorada para crear factura electrónica
     public function create_electronic_invoice($invoice_id, $type = 'normal')
     {
+        log_message("error", "Solicitud entrante");
+
         $this->load->model('invoices_model');
         $this->load->model('clients_model');
         $this->load->model('invoice_items_model');
@@ -499,7 +410,10 @@ private function process_admin_settings()
         }
 
         $client = $this->clients_model->get($invoice->clientid);
+        log_message('error', json_encode($client));
+
         $contact = $this->clients_model->get_contact($client->userid);
+        log_message('error', json_encode($contact));
 
         // 1. Buscar o crear el cliente en Alegra
         $alegra_client = $this->find_or_create_client($client, $contact);
@@ -509,6 +423,7 @@ private function process_admin_settings()
                 'error' => 'Error al procesar el cliente en Alegra'
             ];
         }
+
 
         // 2. Determinar el método de pago
         $payment_method = $this->get_payment_method($invoice);
@@ -621,13 +536,17 @@ private function process_admin_settings()
                 $message .= ' - Comprobante electrónico generado';
             }
 
-            return [
+            $result = [
                 'success' => true,
                 'alegra_id' => $result['id'],
                 'message' => $message,
                 'iva_return_applied' => !empty($iva_return_items),
                 'total_iva_return' => !empty($iva_return_items) ? array_sum(array_column($iva_return_items, 'return_amount')) : 0
             ];
+
+            log_message("error", "Result is: " . json_encode($result));
+
+            return $result;
         } else {
             $this->alegra_cr_model->update_invoice_map_status(
                 $invoice_id,
@@ -637,11 +556,15 @@ private function process_admin_settings()
 
             $error = isset($result['error']) ? $result['error'] : (isset($result['message']) ? $result['message'] : 'Error desconocido');
 
-            return [
+            $result = [
                 'success' => false,
                 'error' => $error,
                 'api_response' => $result
             ];
+
+            log_message("error", "Result is: " . json_encode($result));
+
+            return $result;
         }
     }
 
@@ -668,15 +591,16 @@ private function process_admin_settings()
 
 
     /**
-     * Función mejorada para detectar método de pago
+     * Función para detectar método de pago para efectos de IVA
+     * Ahora usa la configuración de métodos con devolución IVA
      */
     private function get_payment_method($invoice)
     {
-        // Obtener configuración de métodos de pago
-        $payment_config = $this->alegra_cr_model->get_payment_methods_config();
+        // Obtener configuración de métodos con devolución IVA
+        $payment_config = $this->alegra_cr_model->get_payment_methods_config_v2();
 
-        log_message('error', 'Payment config: ' . json_encode($payment_config));
-        log_message('error', 'Invoice allowed_payment_modes: ' . $invoice->allowed_payment_modes);
+        log_message('error', 'Alegra CR: Configuración de métodos con devolución IVA: ' . json_encode($payment_config['iva_return_methods']));
+        log_message('error', 'Alegra CR: Métodos permitidos en factura: ' . $invoice->allowed_payment_modes);
 
         // Verificar los métodos de pago permitidos en la factura
         if (isset($invoice->allowed_payment_modes) && !empty($invoice->allowed_payment_modes)) {
@@ -684,76 +608,30 @@ private function process_admin_settings()
                 unserialize($invoice->allowed_payment_modes) :
                 $invoice->allowed_payment_modes;
 
-            log_message('error', 'Unserialized payment modes: ' . json_encode($allowed_modes));
+            log_message('error', 'Alegra CR: Métodos deserializados: ' . json_encode($allowed_modes));
 
             if (is_array($allowed_modes)) {
                 foreach ($allowed_modes as $mode_id) {
-                    // Verificar si este método de pago está configurado como tarjeta
-                    if (
-                        isset($payment_config['card_payment_methods']) &&
-                        in_array($mode_id, $payment_config['card_payment_methods'])
-                    ) {
-                        log_message('error', 'Found CARD payment method: ' . $mode_id);
+                    // Verificar si este método tiene configurada devolución IVA (tipo CARD)
+                    if (in_array($mode_id, $payment_config['iva_return_methods'])) {
+                        log_message('error', 'Alegra CR: Método ' . $mode_id . ' tiene devolución IVA - Retornando CARD');
                         return 'CARD';
                     }
                 }
             }
         }
 
-        // Verificar campo paymentmethod si existe
+        // Verificar campo paymentmethod si existe (respaldo)
         if (isset($invoice->paymentmethod) && !empty($invoice->paymentmethod)) {
-            $payment_method = strtolower($invoice->paymentmethod);
-
-            if (
-                strpos($payment_method, 'tarjeta') !== false ||
-                strpos($payment_method, 'card') !== false ||
-                strpos($payment_method, 'credit') !== false ||
-                strpos($payment_method, 'débito') !== false ||
-                strpos($payment_method, 'debito') !== false
-            ) {
-                log_message('error', 'Found CARD payment by name: ' . $payment_method);
+            if (in_array($invoice->paymentmethod, $payment_config['iva_return_methods'])) {
+                log_message('error', 'Alegra CR: Método de pago ' . $invoice->paymentmethod . ' tiene devolución IVA - Retornando CARD');
                 return 'CARD';
             }
         }
 
-        log_message('error', 'Defaulting to CASH payment method');
-        return 'CASH'; // Por defecto efectivo
+        log_message('error', 'Alegra CR: Sin métodos con devolución IVA - Retornando CASH');
+        return 'CASH'; // Por defecto efectivo (sin devolución IVA)
     }
-
-    /**
-     * Vista para configurar métodos de pago
-     */
-    // public function payment_methods_settings()
-    // {
-    //     if (!has_permission('alegra_cr', '', 'view')) {
-    //         access_denied('alegra_cr');
-    //     }
-
-    //     if ($this->input->post()) {
-    //         $card_methods = $this->input->post('card_payment_methods') ?: [];
-    //         $cash_methods = $this->input->post('cash_payment_methods') ?: [];
-
-    //         $config = [
-    //             'card_payment_methods' => array_filter($card_methods),
-    //             'cash_payment_methods' => array_filter($cash_methods)
-    //         ];
-
-    //         if ($this->alegra_cr_model->save_payment_methods_config($config)) {
-    //             set_alert('success', 'Configuración de métodos de pago guardada exitosamente');
-    //         } else {
-    //             set_alert('danger', 'Error al guardar la configuración');
-    //         }
-
-    //         redirect(admin_url('alegra_facturacion_cr/payment_methods_settings'));
-    //     }
-
-    //     $data['title'] = 'Configuración de Métodos de Pago - Alegra CR';
-    //     $data['payment_config'] = $this->alegra_cr_model->get_payment_methods_config();
-    //     $data['perfex_payment_modes'] = $this->alegra_cr_model->get_perfex_payment_modes();
-
-    //     $this->load->view('alegra_facturacion_cr/payment_methods_settings', $data);
-    // }
-
 
     /**
      * Parsea un impuesto de Perfex y lo convierte al formato de Alegra
@@ -829,62 +707,6 @@ private function process_admin_settings()
         }
     }
 
-    /**
-     * Función mejorada para preparar items con impuestos correctos
-     */
-    private function format_items_for_costa_rica($items)
-    {
-        $formatted_items = [];
-
-        foreach ($items as $item) {
-            $taxes = $this->get_costa_rica_taxes($item);
-
-            $formatted_item = [
-                'id' => $this->get_alegra_item_id($item),
-                'price' => floatval($item['rate']),
-                'quantity' => floatval($item['qty']),
-                'tax' => $taxes,
-            ];
-
-            // Agregar descuentos si existen
-            if (isset($item['discount']) && $item['discount'] > 0) {
-                $formatted_item['discount'] = [
-                    'type' => 'percentage', // o 'value' según el tipo de descuento en Perfex
-                    'value' => floatval($item['discount'])
-                ];
-            }
-
-            $formatted_items[] = $formatted_item;
-        }
-
-        return $formatted_items;
-    }
-
-    /**
-     * Función para validar y aplicar el IVA del 4% específico de Costa Rica
-     */
-    private function apply_reduced_iva_if_applicable($client, $items)
-    {
-        // Lógica para determinar si aplica el IVA reducido del 4%
-        // En Costa Rica, algunos productos específicos pueden tener IVA del 4%
-
-        foreach ($items as &$item) {
-            log_message('error', 'Tax Item: ' . json_encode($item));
-
-            // Verificar si el producto califica para IVA reducido
-            if ($this->qualifies_for_reduced_iva($item)) {
-                // Actualizar el impuesto al 4%
-                $item['tax'] = [
-                    [
-                        'id' => $this->get_alegra_tax_id('IVA_4', 4),
-                        'percentage' => 4
-                    ]
-                ];
-            }
-        }
-
-        return $items;
-    }
 
     /**
      * Determina si un producto califica para IVA reducido del 4%
@@ -941,16 +763,6 @@ private function process_admin_settings()
         return in_array($prefix, $reduced_iva_cabys);
     }
 
-    private function add_invoice_note($invoice_id, $note)
-    {
-        $this->load->model('invoices_model');
-        $this->invoices_model->add_note([
-            'rel_id' => $invoice_id,
-            'rel_type' => 'invoice',
-            'description' => $note,
-            'addedfrom' => get_staff_user_id()
-        ]);
-    }
 
     // Mejora la función find_or_create_client para Costa Rica
     private function find_or_create_client($client, $contact = null)
@@ -972,6 +784,7 @@ private function process_admin_settings()
 
         // Buscar cliente por email o identificación
         $response = alegra_cr_api_request('GET', 'contacts?search=' . urlencode($email));
+        log_message("error", "Alegra response: " . json_encode($response));
 
         if (is_array($response) && count($response) > 0) {
             foreach ($response as $contact_found) {
@@ -1064,13 +877,6 @@ private function process_admin_settings()
         return false;
     }
 
-    // Otras funciones auxiliares (calculate_taxes, get_payment_condition, etc.)
-    private function calculate_taxes($item)
-    {
-        // Implementar lógica de cálculo de impuestos según necesidades
-        return [];
-    }
-
     private function get_payment_condition($invoice)
     {
         $status = $invoice->status;
@@ -1089,43 +895,22 @@ private function process_admin_settings()
         return $interval->days;
     }
 
-    private function get_identification_type($vat)
-    {
-        if (empty($vat))
-            log_message('error', 'VAT is empty, defaulting to CF');
-        return 'CF';
 
-        // Lógica simple para determinar tipo de identificación
-        if (strlen($vat) == 9) {
-            log_message('error', 'VAT is == 9 return 01');
-            return '01'; // Cédula física
-        } elseif (strlen($vat) == 10) {
-            log_message('error', 'VAT is == 10 return 02');
-            return '02'; // Cédula jurídica
-        } else {
-            log_message('error', 'VAT is unrecognized, defaulting to CF');
-            return 'CF'; // Consumidor final
-        }
-    }
-
-    /**
-     * Determina el impuesto correcto según las reglas de Costa Rica
-     */
     private function get_costa_rica_taxes($item, $payment_method = 'CASH')
     {
         $taxes = [];
         $product_type = $this->get_product_type($item);
 
-        log_message('error', 'Tax Item: ' . json_encode($item));
-        log_message('error', 'Payment Method: ' . $payment_method);
-        log_message('error', 'Product Type: ' . $product_type);
+        log_message('error', 'Alegra CR Taxes: Item: ' . json_encode($item['description']));
+        log_message('error', 'Alegra CR Taxes: Método de pago: ' . $payment_method);
+        log_message('error', 'Alegra CR Taxes: Tipo de producto: ' . $product_type);
 
         // 1. Verificar si ya tiene impuestos definidos en Perfex (prioridad)
         if (isset($item['taxname_1']) && !empty($item['taxname_1'])) {
             $tax_data = $this->parse_perfex_tax($item['taxname_1'], $item['taxrate_1']);
             if ($tax_data) {
                 $taxes[] = $tax_data;
-                log_message('error', 'Using Perfex tax: ' . json_encode($tax_data));
+                log_message('error', 'Alegra CR: Usando impuesto de Perfex: ' . json_encode($tax_data));
                 return $taxes;
             }
         }
@@ -1133,94 +918,46 @@ private function process_admin_settings()
         // 2. Aplicar reglas específicas de Costa Rica
         switch ($product_type) {
             case 'medical_service':
-                // Servicios médicos siempre usan IVA del 4%
-                $taxes[] = [
-                    'id' => 6, // ID para IVA 4% en Alegra
-                    'percentage' => 4
-                ];
-                log_message('error', 'Applied medical service tax: 4%');
+                // Servicios médicos: IVA varía según método de pago
+                if ($payment_method === 'CARD') {
+                    // Con tarjeta: IVA 4% (devolución aplicada)
+                    $taxes[] = [
+                        'id' => 6, // ID para IVA 4% en Alegra
+                        'percentage' => 4
+                    ];
+                    log_message('error', 'Alegra CR: Servicio médico con TARJETA - IVA 4%');
+                } else {
+                    // En efectivo: IVA 13% (normal)
+                    $taxes[] = [
+                        'id' => 1, // ID para IVA 13% en Alegra
+                        'percentage' => 13
+                    ];
+                    log_message('error', 'Alegra CR: Servicio médico con EFECTIVO - IVA 13%');
+                }
                 break;
 
             case 'medicine':
-                // Medicamentos usan IVA del 2%
+                // Medicamentos siempre usan IVA del 2%
                 $taxes[] = [
-                    'id' => $this->get_alegra_tax_id('IVA', 2), // Necesitas configurar el ID para 2%
+                    'id' => 5, // ID para IVA 2% en Alegra
                     'percentage' => 2
                 ];
-                log_message('error', 'Applied medicine tax: 2%');
+                log_message('error', 'Alegra CR: Medicamento - IVA 2%');
                 break;
 
             default:
-                // Productos normales usan IVA del 13%
+                // Productos normales siempre usan IVA del 13%
                 $taxes[] = [
-                    'id' => $this->get_alegra_tax_id('IVA', 13),
+                    'id' => 1, // ID para IVA 13% en Alegra
                     'percentage' => 13
                 ];
-                log_message('error', 'Applied standard tax: 13%');
+                log_message('error', 'Alegra CR: Producto estándar - IVA 13%');
                 break;
         }
 
         return $taxes;
     }
-    private function is_medical_item($item)
-    {
-        $medical_keywords = [
-            'medicamento',
-            'medicina',
-            'farmacia',
-            'hospital',
-            'clínica',
-            'consulta',
-            'médico',
-            'doctor',
-            'enfermería',
-            'tratamiento',
-            'fármaco',
-            'receta',
-            'droguería',
-            'laboratorio',
-            'análisis',
-            'acetaminofen', // Específico del log
-            'paracetamol',
-            'ibuprofeno',
-            'aspirina'
-        ];
 
-        $description = strtolower($item['description']);
-
-        foreach ($medical_keywords as $keyword) {
-            if (strpos($description, $keyword) !== false) {
-                log_message('error', 'Medical keyword found: ' . $keyword . ' in: ' . $description);
-                return true;
-            }
-        }
-
-        // Verificar por código CABYS si está disponible
-        if (isset($item['custom_fields']['CABYS'])) {
-            $is_medical_cabys = $this->is_medical_cabys($item['custom_fields']['CABYS']);
-            log_message('error', 'CABYS medical check: ' . ($is_medical_cabys ? 'yes' : 'no'));
-            return $is_medical_cabys;
-        }
-
-        log_message('error', 'Item not detected as medical: ' . $description);
-        return false;
-    }
-    private function is_medical_cabys($cabys_code)
-    {
-        // Códigos CABYS relacionados con medicina/salud
-        $medical_cabys_prefixes = [
-            '2103',
-            '2104',
-            '2105', // Medicamentos
-            '8610',
-            '8620',
-            '8630', // Servicios médicos
-            '4772' // Comercio de medicamentos
-        ];
-
-        $prefix = substr($cabys_code, 0, 4);
-        return in_array($prefix, $medical_cabys_prefixes);
-    }
     private function save_alegra_invoice_data($perfex_invoice_id, $alegra_invoice_data)
     {
         if (!isset($alegra_invoice_data['id'])) {
@@ -1251,9 +988,6 @@ private function process_admin_settings()
         return $this->alegra_cr_model->save_invoice_map($data);
     }
 
-    /**
-     * Endpoint para obtener estadísticas de auto-transmisión
-     */
     public function get_auto_transmit_stats()
     {
         if (!$this->input->is_ajax_request()) {
@@ -1270,9 +1004,6 @@ private function process_admin_settings()
         ]);
     }
 
-    /**
-     * Guarda la configuración de impuestos
-     */
     public function save_tax_settings()
     {
         if (!has_permission('alegra_cr', '', 'edit_settings')) {
@@ -1322,9 +1053,6 @@ private function process_admin_settings()
         redirect(admin_url('alegra_facturacion_cr/tax_settings'));
     }
 
-    /**
-     * Testa la conexión con Alegra
-     */
     public function test_connection()
     {
         if (!has_permission('alegra_cr', '', 'view')) {
@@ -2136,5 +1864,312 @@ private function process_admin_settings()
                 'error' => $e->getMessage()
             ]);
         }
+    }
+
+    /**
+     * Imprimir factura completa
+     */
+    public function print_invoice($invoice_id, $type = 'web')
+    {
+        if (!has_permission('invoices', '', 'view')) {
+            access_denied('invoices');
+        }
+
+        $this->load->model('invoices_model');
+        $invoice = $this->invoices_model->get($invoice_id);
+
+        if (!$invoice) {
+            show_404();
+        }
+
+        // Obtener mapeo de Alegra
+        $alegra_map = $this->alegra_cr_model->get_invoice_map($invoice_id);
+
+        $data['invoice'] = $invoice;
+        $data['alegra_map'] = $alegra_map;
+        $data['print_type'] = 'invoice';
+        $data['settings'] = alegra_cr_get_all_settings();
+
+        try {
+            if ($type === 'thermal') {
+                $this->print_thermal_invoice($data);
+            } else {
+                $this->load->view('alegra_facturacion_cr/print_invoice', $data);
+            }
+
+            $this->log_print($invoice_id, 'invoice', $type, true);
+        } catch (Exception $e) {
+            $this->log_print($invoice_id, 'invoice', $type, false, $e->getMessage());
+            set_alert('danger', 'Error al imprimir: ' . $e->getMessage());
+            redirect(admin_url('alegra_facturacion_cr/invoices'));
+        }
+    }
+
+    /**
+     * Imprimir ticket simple
+     */
+    public function print_ticket($invoice_id, $type = 'web')
+    {
+        if (!has_permission('invoices', '', 'view')) {
+            access_denied('invoices');
+        }
+
+        $this->load->model('invoices_model');
+        $invoice = $this->invoices_model->get($invoice_id);
+
+        if (!$invoice) {
+            show_404();
+        }
+
+        $data['invoice'] = $invoice;
+        $data['print_type'] = 'ticket';
+        $data['settings'] = alegra_cr_get_all_settings();
+
+        try {
+            if ($type === 'thermal') {
+                //   $this->print_thermal_ticket($data);
+            } else {
+                $this->load->view('alegra_facturacion_cr/print_ticket', $data);
+            }
+
+            $this->log_print($invoice_id, 'ticket', $type, true);
+        } catch (Exception $e) {
+            $this->log_print($invoice_id, 'ticket', $type, false, $e->getMessage());
+            set_alert('danger', 'Error al imprimir: ' . $e->getMessage());
+            redirect(admin_url('alegra_facturacion_cr/invoices'));
+        }
+    }
+
+    /**
+     * Impresión térmica por IP
+     */
+    private function print_thermal_invoice($data)
+    {
+        $settings = $data['settings'];
+
+        if (empty($settings['thermal_printer_ip'])) {
+            throw new Exception('No hay impresora térmica configurada');
+        }
+
+        $thermal_content = $this->generate_thermal_content($data);
+
+        $result = $this->send_to_thermal_printer(
+            $settings['thermal_printer_ip'],
+            $settings['thermal_printer_port'],
+            $thermal_content
+        );
+
+        if (!$result) {
+            throw new Exception('Error al enviar a impresora térmica');
+        }
+
+        set_alert('success', 'Factura enviada a impresora térmica');
+        redirect(admin_url('alegra_facturacion_cr/invoices'));
+    }
+
+    /**
+     * Generar contenido ESC/POS
+     */
+    private function generate_thermal_content($data)
+    {
+        $invoice = $data['invoice'];
+        $settings = $data['settings'];
+        $width = $settings['ticket_width'] ?? 48;
+
+        $content = "";
+
+        // Inicializar impresora
+        $content .= "\x1B\x40";
+        $content .= "\x1B\x61\x01"; // Centrar
+
+        // Logo si está habilitado
+        if ($settings['print_logo'] && !empty($settings['company_logo_path'])) {
+            $content .= get_option('companyname') . "\n\n";
+        }
+
+        $content .= str_repeat("=", $width) . "\n";
+        $content .= "FACTURA ELECTRONICA\n";
+        $content .= str_repeat("=", $width) . "\n";
+
+        // Información de factura
+        $content .= "\x1B\x61\x00"; // Izquierda
+        $content .= "Factura: " . format_invoice_number($invoice->id) . "\n";
+        $content .= "Fecha: " . _d($invoice->date) . "\n";
+        $content .= "Cliente: " . $invoice->client->company . "\n";
+
+        if ($data['alegra_map'] && !empty($data['alegra_map'])) {
+            $content .= "Alegra ID: " . $data['alegra_map']['alegra_invoice_id'] . "\n";
+        }
+
+        $content .= str_repeat("-", $width) . "\n";
+
+        // Items
+        foreach ($invoice->items as $item) {
+            $desc = substr($item['description'], 0, $width - 10);
+            $price = app_format_money($item['rate'], $invoice->currency_name);
+
+            $content .= $desc . "\n";
+            $content .= "  " . $item['qty'] . " x " . $price . "\n";
+        }
+
+        $content .= str_repeat("-", $width) . "\n";
+
+        // Totales
+        $content .= "\x1B\x61\x02"; // Derecha
+        $content .= "Total: " . app_format_money($invoice->total, $invoice->currency_name) . "\n";
+
+        // Footer
+        if (!empty($settings['print_footer_message'])) {
+            $content .= "\n\x1B\x61\x01";
+            $content .= $settings['print_footer_message'] . "\n";
+        }
+
+        if ($settings['show_footer_conditions_ticket'] && !empty($settings['footer_conditions'])) {
+            $content .= "\n\x1B\x61\x00";
+            $content .= str_repeat("-", $width) . "\n";
+            $conditions = wordwrap($settings['footer_conditions'], $width, "\n");
+            $content .= $conditions . "\n";
+        }
+
+        if (!empty($settings['footer_legal_text'])) {
+            $content .= "\n\x1B\x61\x01";
+            $legal_text = wordwrap($settings['footer_legal_text'], $width, "\n");
+            $content .= $legal_text . "\n";
+        }
+
+        $content .= "\n\n\n";
+        $content .= "\x1D\x56\x42\x00"; // Cortar papel
+
+        return $content;
+    }
+
+    /**
+     * Enviar datos a impresora térmica
+     */
+    private function send_to_thermal_printer($ip, $port, $content)
+    {
+        try {
+            $socket = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
+
+            if (!$socket) {
+                return false;
+            }
+
+            $result = socket_connect($socket, $ip, $port);
+
+            if (!$result) {
+                socket_close($socket);
+                return false;
+            }
+
+            socket_write($socket, $content, strlen($content));
+            socket_close($socket);
+
+            return true;
+        } catch (Exception $e) {
+            log_message('error', 'Error impresora térmica: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Registrar impresión en historial
+     */
+    private function log_print($invoice_id, $print_type, $printer_type, $success, $error_message = null)
+    {
+        $data = [
+            'invoice_id' => $invoice_id,
+            'print_type' => $print_type,
+            'printer_type' => $printer_type,
+            'success' => $success ? 1 : 0,
+            'printed_by' => get_staff_user_id(),
+            'error_message' => $error_message,
+            'created_at' => date('Y-m-d H:i:s')
+        ];
+
+        $this->db->insert(db_prefix() . 'alegra_cr_print_history', $data);
+    }
+
+    /**
+     * API para obtener configuración de impresión
+     */
+    public function get_print_settings()
+    {
+        header('Content-Type: application/json');
+
+        if (!has_permission('invoices', '', 'view')) {
+            echo json_encode(['error' => 'Sin permisos']);
+            return;
+        }
+
+        $settings = alegra_cr_get_all_settings();
+        echo json_encode($settings);
+    }
+
+    /**
+     * Historial de impresiones
+     */
+    public function print_history()
+    {
+        if (!has_permission('invoices', '', 'view')) {
+            access_denied('invoices');
+        }
+
+        $data['title'] = 'Historial de Impresiones';
+        $data['history'] = $this->get_print_history_data();
+
+        $this->load->view('alegra_facturacion_cr/print_history', $data);
+    }
+
+    /**
+     * Obtener datos del historial
+     */
+    private function get_print_history_data($limit = 50)
+    {
+        $this->db->select('ph.*, i.number as invoice_number, c.company as client_name, s.firstname, s.lastname');
+        $this->db->from(db_prefix() . 'alegra_cr_print_history ph');
+        $this->db->join(db_prefix() . 'invoices i', 'i.id = ph.invoice_id', 'left');
+        $this->db->join(db_prefix() . 'clients c', 'c.userid = i.clientid', 'left');
+        $this->db->join(db_prefix() . 'staff s', 's.staffid = ph.printed_by', 'left');
+        $this->db->order_by('ph.created_at', 'DESC');
+        $this->db->limit($limit);
+
+        return $this->db->get()->result_array();
+    }
+
+    /**
+     * Prueba de impresora térmica
+     */
+    public function test_thermal_print()
+    {
+        header('Content-Type: application/json');
+
+        if (!has_permission('invoices', '', 'edit')) {
+            echo json_encode(['success' => false, 'message' => 'Sin permisos']);
+            return;
+        }
+
+        $ip = $this->input->post('ip');
+        $port = $this->input->post('port') ?: 9100;
+
+        if (empty($ip)) {
+            echo json_encode(['success' => false, 'message' => 'IP requerida']);
+            return;
+        }
+
+        $test_content = "\x1B\x40";
+        $test_content .= "\x1B\x61\x01";
+        $test_content .= "PRUEBA DE IMPRESION\n";
+        $test_content .= "==================\n";
+        $test_content .= "Fecha: " . date('Y-m-d H:i:s') . "\n";
+        $test_content .= "Conexion exitosa\n\n\n";
+        $test_content .= "\x1D\x56\x42\x00";
+
+        $result = $this->send_to_thermal_printer($ip, $port, $test_content);
+
+        echo json_encode([
+            'success' => $result,
+            'message' => $result ? 'Prueba enviada' : 'Error de conexión'
+        ]);
     }
 }
